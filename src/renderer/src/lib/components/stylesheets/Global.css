@@ -1,0 +1,36 @@
+.full-width {
+  width: 100%;
+}
+
+.full-height {
+  height: 100%;
+}
+
+.full-size {
+  width: 100%;
+  height: 100%;
+}
+
+.hover--primaryHover:hover {
+  background-color: var(--primaryHover);
+}
+
+.hover--errorHover:hover {
+  background-color: var(--errorHover);
+}
+
+.hover--secondaryHover:hover {
+  background-color: var(--secondaryHover);
+}
+
+.hover--infoHover:hover {
+  background-color: var(--infoHover);
+}
+
+.hover--successHover:hover {
+  background-color: var(--successHover);
+}
+
+.hover--warningHover:hover {
+  background-color: var(--warningHover);
+}

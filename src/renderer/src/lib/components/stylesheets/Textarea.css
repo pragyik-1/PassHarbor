@@ -1,0 +1,22 @@
+.textarea {
+  border-width: 1px;
+  width: 100%;
+  resize: none;
+  border-radius: 0.375rem;
+  border-style: solid;
+  border-color: var(--border);
+  background-color: inherit;
+  color: var(--text);
+  outline: none;
+  transition: background-color 0.2s;
+}
+
+.textarea:hover {
+  background-color: var(--inputHover);
+}
+
+.textarea:focus {
+  background-color: var(--inputHover);
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 2px var(--blue-500);
+}

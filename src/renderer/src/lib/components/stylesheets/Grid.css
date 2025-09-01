@@ -1,0 +1,56 @@
+/* Grid.css */
+.grid-container {
+  display: flex;
+  /* Use the CSS variable for gap */
+  gap: var(--grid-gap, 0rem) !important;
+}
+
+/* Flex Direction */
+.grid-container.row {
+  flex-direction: row !important;
+}
+.grid-container.column {
+  flex-direction: column !important;
+}
+
+/* Justify Content */
+.grid-container.justify-start {
+  justify-content: flex-start !important;
+}
+.grid-container.justify-center {
+  justify-content: center !important;
+}
+.grid-container.justify-end {
+  justify-content: flex-end !important;
+}
+.grid-container.justify-between {
+  justify-content: space-between !important;
+}
+.grid-container.justify-around {
+  justify-content: space-around !important;
+}
+.grid-container.justify-evenly {
+  justify-content: space-evenly !important;
+}
+
+/* Align Items */
+.grid-container.align-start {
+  align-items: flex-start !important;
+}
+.grid-container.align-center {
+  align-items: center !important;
+}
+.grid-container.align-end {
+  align-items: flex-end !important;
+}
+.grid-container.align-stretch {
+  align-items: stretch !important;
+}
+.grid-container.align-baseline {
+  align-items: baseline !important;
+}
+
+/* Flex Wrap */
+.grid-container.wrap {
+  flex-wrap: wrap !important;
+}

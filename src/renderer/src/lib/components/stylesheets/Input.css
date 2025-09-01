@@ -1,0 +1,62 @@
+.input-base {
+  border: 2px solid var(--input);
+  border-radius: 0.375rem;
+  background-color: var(--input);
+  color: var(--text);
+  padding: 0.75rem;
+  outline: none;
+  transition:
+    background-color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.input-full-width {
+  width: 100%;
+}
+
+.input-label {
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
+.input-base:focus {
+  border: 2px solid var(--primary);
+  outline: none;
+  box-shadow: 0 0 3 2px var(--primary);
+  transition: 0.2s ease;
+}
+
+.input-disabled {
+  cursor: var(--cursorDisabled);
+  opacity: var(--disabledOpacity);
+}
+
+.file-label {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background-color: inherit;
+  color: var(--text);
+  padding: 0.5rem 1rem;
+  transition: background-color 0.2s ease;
+}
+
+.file-label:hover {
+  background-color: var(--inputHover);
+}
+
+.file-info {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #a0a0a0;
+}
+
+.file-label:disabled {
+  cursor: var(--cursorDisabled);
+  opacity: var(--disabledOpacity);
+}
+
+.hidden {
+  display: none;
+}

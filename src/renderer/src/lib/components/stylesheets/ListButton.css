@@ -1,0 +1,22 @@
+.list-button {
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  color: var(--text);
+  background-color: transparent;
+  border: 0px;
+  transition: background-color 0.2s ease;
+  white-space: nowrap;
+}
+
+.list-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.list-button:hover {
+  background-color: var(--hover);
+}

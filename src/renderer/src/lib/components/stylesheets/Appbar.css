@@ -1,0 +1,28 @@
+@import './Global.css';
+
+.appbar {
+  z-index: 50;
+  width: 100%;
+  left: 0;
+  right: 0;
+  transition: transform 0.3s;
+  box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.1);
+}
+.fixed {
+  position: fixed;
+}
+.static {
+  position: static;
+}
+.top {
+  top: 0;
+}
+.bottom {
+  bottom: 0;
+}
+.appbar-grid {
+  padding: 0.5rem 1rem;
+}
+.-translate-y-full {
+  transform: translateY(-100%);
+}

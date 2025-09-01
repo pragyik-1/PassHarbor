@@ -1,0 +1,14 @@
+node_modules
+dist
+out
+.DS_Store
+.eslintcache
+data
+build
+*.log*
+package-lock.json
+yarn-error.log
+npm-debug.log*
+coverage
+.env
+.vscode
