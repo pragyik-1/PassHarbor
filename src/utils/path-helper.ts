@@ -299,14 +299,11 @@ class Json extends File {
     return JSON.parse(await super.read('utf-8'))
   }
 
-  async write(
-    data: string | Buffer | Record<string, unknown>,
-    encoding: BufferEncoding = 'utf-8'
-  ): Promise<void> {
+  async write(data: unknown, encoding: BufferEncoding = 'utf-8'): Promise<void> {
     if (typeof data === 'object' && !Buffer.isBuffer(data)) {
       return super.write(JSON.stringify(data, null, 2), encoding)
     }
-    return super.write(data, encoding)
+    return super.write(JSON.stringify(data), encoding)
   }
 
   async create(recursive = true): Promise<void> {

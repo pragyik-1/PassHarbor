@@ -1,13 +1,18 @@
 import { encrypt, decrypt } from './encryptor'
 import { Dir, Json } from '../utils/path-helper'
-import { VaultsDir } from '../main/globals.js'
+import { VaultsDir } from '../main/global.js'
+import { createHash } from 'crypto'
+
+function hashTitle(title: string): string {
+  return createHash('sha256').update(title).digest('hex')
+}
 
 /** Load encrypted vault from disk. */
-async function loadVault(vault: string): Promise<Record<string, string>> {
+async function loadVault(vault: string): Promise<{ hash: string; key: string; value: string }[]> {
   const vaultPath = new Dir(VaultsDir.join(vault))
   const passwordPath = new Json(vaultPath.join('passwords.json'))
-  if (!(await passwordPath.exists())) return {}
-  return (await passwordPath.read()) || {}
+  if (!(await passwordPath.exists())) return []
+  return (await passwordPath.read()) || []
 }
 
 export async function createVault(vault: string): Promise<boolean> {
@@ -25,7 +30,10 @@ export async function createVault(vault: string): Promise<boolean> {
 }
 
 /** Write encrypted vault back to disk. */
-async function saveVault(vault: string, data: Record<string, string>): Promise<boolean> {
+async function saveVault(
+  vault: string,
+  data: { hash: string; key: string; value: string }[]
+): Promise<boolean> {
   const passwordPath = new Json(VaultsDir.join(vault, 'passwords.json'))
   try {
     await passwordPath.create()
@@ -37,24 +45,31 @@ async function saveVault(vault: string, data: Record<string, string>): Promise<b
   }
 }
 
-/**
- *  - Save an encrypted password
- *  - Only to be used by the backend as it risks duplication
- */
 export async function savePassword(
   vault = 'main',
   passwordFor: string,
   password: string
 ): Promise<boolean> {
   try {
-    const encryptedKey = encrypt(passwordFor)
-    const encryptedValue = encrypt(password)
-    if (!encryptedKey || !encryptedValue) {
-      console.log('Error encrypting password')
-      return false
-    }
     const data = await loadVault(vault)
-    data[encryptedKey] = encryptedValue
+    const passwordHash = hashTitle(passwordFor)
+
+    // Check if the password already exists
+    const existingEntryIndex = data.findIndex((entry) => entry.hash === passwordHash)
+
+    if (existingEntryIndex !== -1) {
+      // Update existing password
+      data[existingEntryIndex].value = encrypt(password)
+      data[existingEntryIndex].key = encrypt(passwordFor) // Also update the key, as it's non-deterministic
+    } else {
+      // Add a new password entry
+      data.push({
+        hash: passwordHash,
+        key: encrypt(passwordFor),
+        value: encrypt(password)
+      })
+    }
+
     return await saveVault(vault, data)
   } catch (error) {
     console.error(`Error saving password for "${passwordFor}" in vault "${vault}":`, error)
@@ -86,11 +101,10 @@ export async function getPassword(
   passwordFor: string
 ): Promise<string | undefined> {
   try {
-    const encryptedKey = encrypt(passwordFor)
-    if (!encryptedKey) return undefined
     const data = await loadVault(vault)
-    const encryptedValue = data[encryptedKey]
-    return encryptedValue ? decrypt(encryptedValue)! : undefined
+    const passwordHash = hashTitle(passwordFor)
+    const entry = data.find((item) => item.hash === passwordHash)
+    return entry ? decrypt(entry.value) : undefined
   } catch (error) {
     console.error(`Error getting password for "${passwordFor}" in vault "${vault}":`, error)
     return undefined
@@ -98,14 +112,19 @@ export async function getPassword(
 }
 
 /** Delete a password by title. */
+// In your backend password.js file
 export async function deletePassword(vault = 'main', passwordFor: string): Promise<boolean> {
   try {
-    const encryptedKey = encrypt(passwordFor)
-    if (!encryptedKey) return false
     const data = await loadVault(vault)
-    if (!(encryptedKey in data)) return false
-    delete data[encryptedKey]
-    return await saveVault(vault, data)
+    const passwordHash = hashTitle(passwordFor)
+    const initialLength = data.length
+    const newData = data.filter((item) => item.hash !== passwordHash)
+
+    if (newData.length === initialLength) {
+      return false // Password not found
+    }
+
+    return await saveVault(vault, newData)
   } catch (error) {
     console.error(`Error deleting password for "${passwordFor}" in vault "${vault}":`, error)
     return false
@@ -118,9 +137,15 @@ export async function changePassword(
   newPassword: string
 ): Promise<boolean> {
   try {
-    const password = getPassword(vault, passwordFor)
-    if (!password) return false
-    return await savePassword(vault, passwordFor, newPassword)
+    const keyHash = hashTitle(passwordFor) // Use the deterministic hash to find the entry
+    const data = await loadVault(vault)
+    if (!(keyHash in data)) {
+      console.error(`Password for "${passwordFor}" not found.`)
+      return false
+    }
+    const encryptedValue = encrypt(newPassword)
+    data[keyHash] = encryptedValue
+    return await saveVault(vault, data)
   } catch (error) {
     console.error(`Error changing password for "${passwordFor}" in vault "${vault}":`, error)
     return false
@@ -132,13 +157,12 @@ export async function changePassword(
  */
 export async function getPasswords(vault = 'main'): Promise<Record<string, string>> {
   try {
-    const encrypted = await loadVault(vault)
+    const data = await loadVault(vault)
     const decrypted: Record<string, string> = {}
 
-    for (const encryptedKey in encrypted) {
-      const decryptedKey = decrypt(encryptedKey)
-      const decryptedValue = decrypt(encrypted[encryptedKey])
-      if (!decryptedKey || !decryptedValue) continue
+    for (const entry of data) {
+      const decryptedKey = decrypt(entry.key)
+      const decryptedValue = decrypt(entry.value)
       decrypted[decryptedKey] = decryptedValue
     }
 

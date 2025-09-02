@@ -4,7 +4,7 @@ const ALGORITHM: CipherGCMTypes = 'aes-256-gcm'
 const SECRET_KEY_LENGTH = 32
 const IV_LENGTH = 16
 
-const passphrase = 'this-is-a-very-secure-passphrase-that-should-be-kept-secret'
+const passphrase = 'encpassword'
 const key = scryptSync(passphrase, 'salt', SECRET_KEY_LENGTH)
 
 export function encrypt(text: string): string {

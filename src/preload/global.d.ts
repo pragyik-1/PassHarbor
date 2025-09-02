@@ -25,4 +25,30 @@ declare global {
       }
     }
   }
+  export type Settings = {
+    darkMode: boolean
+    vaults: {
+      all: string[]
+      main: string
+      saveLocation: string
+    }
+    masterPassword: {
+      enabled: boolean
+      saveLocation: string
+    }
+    passwordGenerator: {
+      length: number
+      upper: boolean
+      lower: boolean
+      digits: boolean
+      symbols: boolean
+    }
+    desktopBehavior: {
+      closeToTray: boolean
+      minimizeToTray: boolean
+    }
+    behavior: {
+      hidePasswordsByDefault: boolean
+    }
+  }
 }

@@ -10,7 +10,7 @@ import {
 } from '../utils/password-utils'
 import { encrypt } from '../utils/encryptor'
 import { Path, File, Dir } from '../utils/path-helper'
-import { MasterPasswordPath } from './globals.js'
+import { MasterPasswordPath, VaultsDir } from './global.js'
 
 ipcMain.handle('dialog:selectFile', async (_, options) => {
   try {
@@ -61,7 +61,7 @@ ipcMain.handle('masterpassword:get', async () => {
 })
 
 ipcMain.handle('vault:exists', async (_, vault = 'main') => {
-  return await new Path(`data/vaults/${vault}/passwords.json`).exists()
+  return await VaultsDir.join(vault, 'passwords.json').exists()
 })
 
 ipcMain.handle('vault:create', async (_, vault = 'main') => {
@@ -69,7 +69,7 @@ ipcMain.handle('vault:create', async (_, vault = 'main') => {
 })
 
 ipcMain.handle('vault:delete', async (_, vault = 'main') => {
-  const _vault = new Dir(`data/vaults/${vault}`)
+  const _vault = VaultsDir.join(vault).as(Dir)
   return await _vault.remove()
 })
 
