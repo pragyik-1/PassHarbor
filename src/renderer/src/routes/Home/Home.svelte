@@ -14,7 +14,13 @@
   } from 'lucide-svelte'
   import { Card, Grid, Input, List, ListButton, Button } from '../../lib'
   import { useTimeout } from '../../lib/utils'
-  import { currentVault, generatePassword, passwords, vaults } from '../../global.svelte'
+  import {
+    currentVault,
+    generatePassword,
+    passwords,
+    refreshVault,
+    vaults
+  } from '../../global.svelte'
   import { analyzePasswordSecurity, getStrengthColor } from '../../utils/passwordStrength'
   import './Home.css'
   import PasswordChecks from './SubComponents/PasswordChecks.svelte'
@@ -45,6 +51,12 @@
     originalPassword = passwords.value[selectedPassword]
     editMode = false
     await password.change(currentVault.value, selectedPassword, passwords.value[selectedPassword])
+  }
+
+  async function handleDelete() {
+    await password.delete(currentVault.value, selectedPassword)
+    refreshVault(currentVault.value)
+    selectedPassword = ''
   }
 
   async function copyToClipboardAndHandleState(password: string, title: string) {
@@ -208,7 +220,7 @@
                 iconSize={20}
                 tooltip="Delete Password"
                 variant="outlined"
-                onclick={async () => await password.delete(currentVault.value, selectedPassword)}
+                onclick={async () => await handleDelete()}
               >
                 Delete
               </Button>
