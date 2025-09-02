@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { Vault, PlusIcon, KeyIcon, SettingsIcon } from 'lucide-svelte'
-  import { AppBar, Button, Dropdown, List, ListButton } from '../..'
+  import { Vault, PlusIcon, KeyIcon, SettingsIcon, ChevronLeft } from 'lucide-svelte'
+  import { AppBar, Button, Dropdown, Grid, List, ListButton } from '../..'
   import { vaults, currentVault } from '../../../global.svelte'
   import { colors } from '../../utils'
   import AddMasterPasswordModal from '../AddMasterPasswordModal/AddMasterPasswordModal.svelte'
   import AddVaultModal from '../AddVaultModal/AddVaultModal.svelte'
+  import { push, pop } from 'svelte-spa-router'
 
   let addVaultModalOpen = $state(false)
   let addMasterPasswordModalOpen = $state(false)
@@ -32,9 +33,16 @@
 {/snippet}
 
 <AppBar style="padding:0.25rem" fixed>
-  <div>
-    <p style="font-weight: 600; font-size: 1.15rem;">Pass Harbor</p>
-  </div>
+  <Grid row>
+    <Button
+      tooltip="Back"
+      iconLeft={ChevronLeft}
+      iconSize={25}
+      variant="ghost"
+      onclick={() => pop()}
+    />
+    <p style="font-weight: 600; margin-left: 0.5rem">PassHarbor</p>
+  </Grid>
   <div>
     <Dropdown wrapperStyle="margin-right: 3rem;" anchor={DropdownButton} bind:open={dropdownOpen}>
       <List>
@@ -60,6 +68,7 @@
         <ListButton icon={KeyIcon} onclick={() => (addMasterPasswordModalOpen = true)}
           >Master Password</ListButton
         >
+        <ListButton icon={SettingsIcon} onclick={() => push('/settings')}>More</ListButton>
       </List>
     </Dropdown>
   </div>
