@@ -9,8 +9,9 @@ import {
   savePasswordIfMissing
 } from '../utils/password-utils'
 import { encrypt } from '../utils/encryptor'
-import { Path, File, Dir } from '../utils/path-helper'
+import { Dir } from '../utils/path-helper'
 import { MasterPasswordPath, VaultsDir } from './global.js'
+import { setSettings, getSettings } from '../utils/settings'
 
 ipcMain.handle('dialog:selectFile', async (_, options) => {
   try {
@@ -75,4 +76,12 @@ ipcMain.handle('vault:delete', async (_, vault = 'main') => {
 
 ipcMain.handle('vault:all', async () => {
   return await getVaults()
+})
+
+ipcMain.handle('settings:get', () => {
+  return getSettings()
+})
+
+ipcMain.handle('settings:set', async (_, settings) => {
+  return await setSettings(settings)
 })

@@ -23,6 +23,10 @@ declare global {
         create: (vault: string) => Promise<boolean>
         delete: (vault: string) => Promise<boolean>
       }
+      settings: {
+        get: () => Promise<Settings>
+        set: (settings: Settings) => Promise<void>
+      }
     }
   }
   export type Settings = {

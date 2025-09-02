@@ -34,7 +34,7 @@ export const SettingsFile = new Json(RootDir.join('settings.json'))
 
 await initSettings()
 
-let settings = await SettingsFile.read<Settings>()
+const settings = await SettingsFile.read<Settings>()
 
 export const VaultsDir = new Dir(RootDir.join(settings.vaults.saveLocation))
 export const MasterPasswordPath = new File(RootDir.join(settings.masterPassword.saveLocation))

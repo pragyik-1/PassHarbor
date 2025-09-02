@@ -33,7 +33,7 @@
 
 <AppBar style="padding:0.25rem" fixed>
   <div>
-    <p style="font-weight: 600; font-size: 1.15rem;">LogSafe</p>
+    <p style="font-weight: 600; font-size: 1.15rem;">Pass Harbor</p>
   </div>
   <div>
     <Dropdown wrapperStyle="margin-right: 3rem;" anchor={DropdownButton} bind:open={dropdownOpen}>

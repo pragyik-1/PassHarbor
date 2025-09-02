@@ -14,17 +14,16 @@ export function generatePassword(length = 16): string {
   const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
   const lower = 'abcdefghijklmnopqrstuvwxyz'
   const digits = '0123456789'
-  const symbols = '_-.' // Commonly allowed symbols
+  const symbols = '_-.'
 
   const all = upper + lower + digits + symbols
   const getRandomChar = (chars: string) =>
     chars[Math.floor((crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32) * chars.length)]
 
-  if (length < 8) length = 8 // enforce reasonable minimum
+  if (length < 8) length = 8
 
   const password: string[] = []
 
-  // Ensure at least one character from each category
   password.push(getRandomChar(upper))
   password.push(getRandomChar(lower))
   password.push(getRandomChar(digits))
@@ -38,7 +37,6 @@ export function generatePassword(length = 16): string {
     password.push(all[randomValues[i] % all.length])
   }
 
-  // Shuffle the password to avoid predictable placement
   for (let i = password.length - 1; i > 0; i--) {
     const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1)
     const tmp = password[i]

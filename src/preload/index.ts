@@ -49,6 +49,15 @@ const api = {
     delete(vault: string): Promise<boolean> {
       return ipcRenderer.invoke('vault:delete', vault)
     }
+  },
+
+  settings: {
+    get(): Promise<Settings> {
+      return ipcRenderer.invoke('settings:get')
+    },
+    set(settings: Settings): Promise<void> {
+      return ipcRenderer.invoke('settings:set', settings)
+    }
   }
 }
 
