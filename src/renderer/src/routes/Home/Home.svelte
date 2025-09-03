@@ -188,7 +188,7 @@
               Password Strength: {currentPasswordSecurity.strength}
             </p>
 
-            <PasswordChecks bind:currentPasswordSecurity={passwords.value[selectedPassword]} />
+            <PasswordChecks bind:currentPasswordSecurity />
 
             <Grid row fullWidth justify="between" style="margin-top: auto">
               <Button
