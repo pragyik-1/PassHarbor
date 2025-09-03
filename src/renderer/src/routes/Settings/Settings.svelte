@@ -1,6 +1,9 @@
 <script lang="ts">
-  import { Card, Divider, Grid, Input, Switch } from '../../lib'
-  import { settings as _settings } from '../../global.svelte'
+  import { Card, Accordion, Input, Switch } from '../../lib'
+  import { settings as _settings, vaults } from '../../global.svelte'
+  import SettingsItem from './SubComponents/SettingsItem.svelte'
+  import DirInput from './SubComponents/DirInput.svelte'
+  import SettingsCategory from './SubComponents/SettingsCategory.svelte'
 
   const settings = _settings.value
   let newSettings: Settings = JSON.parse(JSON.stringify(settings))
@@ -8,31 +11,31 @@
 
 <div style="margin-top: 6rem; width: 70%; margin-left: auto; margin-right: auto;">
   <Card>
-    <h3>General Settings</h3>
-    <Divider />
-    <Grid row justify="between">
-      <p>Master Password Enabled</p>
+    <SettingsCategory title="General Settings" />
+    <SettingsItem title="Master Password Enabled">
       <Switch bind:checked={newSettings.masterPassword.enabled} />
-    </Grid>
+    </SettingsItem>
     {#if newSettings.masterPassword.enabled}
-      <Grid row justify="between">
-        <p>Master Password Save Location</p>
-        <Grid col>
-          <Input
-            type="directory"
-            webkitdirectory
-            bind:value={newSettings.masterPassword.saveLocation}
-          />
-          <p class="description-text">currently: {newSettings.masterPassword.saveLocation}</p>
-        </Grid>
-      </Grid>
+      <SettingsItem title="Master Password Save Location">
+        <DirInput bind:value={newSettings.masterPassword.saveLocation} />
+      </SettingsItem>
     {/if}
-    <Grid row justify="between">
-      <p>Dark Mode</p>
+    <SettingsItem title="Dark Mode">
       <Switch bind:checked={newSettings.darkMode} />
-    </Grid>
-    <Divider />
-    <h3>Vault Settings</h3>
-    <Grid justify="between"></Grid>
+    </SettingsItem>
+    <SettingsCategory title="Vault Settings" />
+    <SettingsItem title="Vault Save Location">
+      <DirInput bind:value={newSettings.vaults.saveLocation} />
+    </SettingsItem>
+    <SettingsItem title="Main Vault">
+      <Input bind:value={newSettings.vaults.main} />
+    </SettingsItem>
+    <Accordion title="All Vaults">
+      {#each vaults.value as vault}
+        <SettingsItem title={vault}>
+          <Input bind:value={vault} />
+        </SettingsItem>
+      {/each}
+    </Accordion>
   </Card>
 </div>

@@ -61,9 +61,10 @@
       aria-checked={checked}
     />
     <span class="slider round">
-      {#if checked && onLabel}
+      {#if onLabel}
         <span class="switch-text on-text">{onLabel}</span>
-      {:else if !checked && offLabel}
+      {/if}
+      {#if offLabel}
         <span class="switch-text off-text">{offLabel}</span>
       {/if}
     </span>

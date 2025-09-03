@@ -32,7 +32,6 @@ declare global {
   export type Settings = {
     darkMode: boolean
     vaults: {
-      all: string[]
       main: string
       saveLocation: string
     }
@@ -46,10 +45,6 @@ declare global {
       lower: boolean
       digits: boolean
       symbols: boolean
-    }
-    desktopBehavior: {
-      closeToTray: boolean
-      minimizeToTray: boolean
     }
     behavior: {
       hidePasswordsByDefault: boolean

@@ -2,6 +2,10 @@ export const currentVault = $state({
   value: localStorage.getItem('currentVault') || 'main'
 })
 
+export const settings = $state({
+  value: await window.api.settings.get()
+})
+
 export async function refreshVault(vault: string): Promise<void> {
   currentVault.value = vault
   localStorage.setItem('currentVault', vault)

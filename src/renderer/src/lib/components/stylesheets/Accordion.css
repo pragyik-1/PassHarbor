@@ -1,0 +1,16 @@
+ .accordion {
+    width: 100%;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .accordion-content {
+    overflow: hidden;
+    padding: 1rem 0;
+  }
+
+  .chevron {
+    transition: transform 0.2s ease-in-out;
+  }
+  .rotate {
+    transform: rotate(180deg);
+  }

@@ -28,7 +28,7 @@
   align-items: center;
   width: 3.5rem;
   height: 1.75rem;
-  background-color: var(--border);
+  background-color: var(--input);
   transition:
     background-color 0.2s ease,
     box-shadow 0.2s ease;

@@ -4,6 +4,7 @@ import { app } from 'electron'
 export const DefaultSettings = {
   darkMode: false,
   vaults: {
+    all: [],
     main: 'main',
     saveLocation: 'vaults'
   },

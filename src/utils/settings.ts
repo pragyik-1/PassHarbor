@@ -1,7 +1,16 @@
-import { SettingsFile } from '../main/global'
+import { SettingsFile, VaultsDir } from '../main/global'
 import { DefaultSettings } from '../main/global'
 
 let settings = await SettingsFile.read<Settings>()
+
+if (await VaultsDir.exists()) {
+  settings = {
+    ...settings,
+    vaults: {
+      ...settings.vaults
+    }
+  }
+}
 
 export function getSettings(): Settings {
   return {
