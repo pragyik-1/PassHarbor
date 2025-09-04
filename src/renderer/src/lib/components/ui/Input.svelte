@@ -6,7 +6,7 @@
     label?: string
     placeholder?: string
     type?: 'text' | 'password' | 'number' | 'file' | 'email' | 'tel' | 'directory'
-    value?: string
+    value?: string | number
     required?: boolean
     style?: string
     id?: string

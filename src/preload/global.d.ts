@@ -41,13 +41,11 @@ declare global {
     }
     passwordGenerator: {
       length: number
+      symbolsToUse: string
       upper: boolean
       lower: boolean
       digits: boolean
       symbols: boolean
-    }
-    behavior: {
-      hidePasswordsByDefault: boolean
     }
   }
 }

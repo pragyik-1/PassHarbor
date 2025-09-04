@@ -16,6 +16,7 @@ export const DefaultSettings = {
   },
   enabled: false,
   passwordGenerator: {
+    symbolsToUse: '_-.',
     length: 12,
     upper: true,
     lower: true,

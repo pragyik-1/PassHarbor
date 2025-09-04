@@ -49,5 +49,24 @@
         </SettingsItem>
       {/each}
     </Accordion>
+    <SettingsCategory title="Password Generator Settings" />
+    <SettingsItem title="Length">
+      <Input type="number" bind:value={newSettings.passwordGenerator.length} />
+    </SettingsItem>
+    <SettingsItem title="Symbols to be used (other than a-z, A-Z, 0-9)">
+      <Input bind:value={newSettings.passwordGenerator.symbolsToUse} />
+    </SettingsItem>
+    <SettingsItem title="Use Lowercase">
+      <Switch bind:checked={newSettings.passwordGenerator.lower} />
+    </SettingsItem>
+    <SettingsItem title="Use Uppercase">
+      <Switch bind:checked={newSettings.passwordGenerator.upper} />
+    </SettingsItem>
+    <SettingsItem title="Use Digits">
+      <Switch bind:checked={newSettings.passwordGenerator.digits} />
+    </SettingsItem>
+    <SettingsItem title="Use Symbols">
+      <Switch bind:checked={newSettings.passwordGenerator.symbols} />
+    </SettingsItem>
   </Card>
 </div>
