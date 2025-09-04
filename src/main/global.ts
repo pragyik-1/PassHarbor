@@ -1,19 +1,20 @@
 import { Path, File, Dir, Json } from '../utils/path-helper'
 import { app } from 'electron'
 
+export const RootDir = new Path(`${app.getPath('userData')}/logsafe`)
+
 export const DefaultSettings = {
   darkMode: false,
   vaults: {
     all: [],
     main: 'main',
-    saveLocation: 'vaults'
+    saveLocation: RootDir.join('vaults').toString()
   },
   masterPassword: {
     enabled: false,
-    saveLocation: 'mpwd.txt'
+    saveLocation: RootDir.join('master-password.pwd').toString()
   },
   enabled: false,
-  saveLocation: 'settings.json',
   passwordGenerator: {
     length: 12,
     upper: true,
@@ -30,12 +31,11 @@ export async function initSettings() {
   }
 }
 
-export const RootDir = new Path(`${app.getPath('userData')}/logsafe`)
 export const SettingsFile = new Json(RootDir.join('settings.json'))
 
 await initSettings()
 
 const settings = await SettingsFile.read<Settings>()
 
-export const VaultsDir = new Dir(RootDir.join(settings.vaults.saveLocation))
-export const MasterPasswordPath = new File(RootDir.join(settings.masterPassword.saveLocation))
+export const VaultsDir = new Dir(settings.vaults.saveLocation)
+export const MasterPasswordPath = new File(settings.masterPassword.saveLocation)
