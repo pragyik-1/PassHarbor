@@ -6,6 +6,7 @@
   import MasterPasswordModal from '../lib/components/MasterPasswordModal/MasterPasswordModal.svelte'
   import { onMount } from 'svelte'
   import TopBar from '../lib/components/TopBar/TopBar.svelte'
+  import { settings } from '../global.svelte'
   let routes = $state({
     '/': Home,
     '/home': Home,
@@ -17,7 +18,8 @@
   onMount(async () => {
     if (
       (await window.api.masterPassword.exists()) &&
-      sessionStorage.getItem('haslogged') !== 'true'
+      sessionStorage.getItem('haslogged') !== 'true' &&
+      settings.value.masterPassword.enabled
     ) {
       masterPasswordModalOpen = true
     } else {

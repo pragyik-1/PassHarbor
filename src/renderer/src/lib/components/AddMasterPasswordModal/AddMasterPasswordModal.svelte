@@ -12,6 +12,7 @@
       onsubmit={async () => {
         try {
           await window.api.masterPassword.create(passwordName)
+          window.location.reload()
         } catch (error) {
           console.error('Error writing file:', error)
         }
