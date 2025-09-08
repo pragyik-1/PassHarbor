@@ -2,7 +2,6 @@
   import { CheckIcon, XIcon } from 'lucide-svelte'
   import { Grid, List } from '../../../lib'
   let { currentPasswordSecurity = $bindable() } = $props()
-  console.log('currentPasswordSecurity:', currentPasswordSecurity)
 </script>
 
 {#snippet PasswordCheck(label: string, passed: boolean, warning = false)}

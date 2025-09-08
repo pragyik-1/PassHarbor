@@ -12,7 +12,7 @@
   let passwordVisible = $state(false)
 </script>
 
-<Modal style="border-radius: 1rem" bind:isOpen={open} class="modal">
+<Modal bind:isOpen={open} class="modal">
   <div class="modal-content">
     <header class="modal-header">
       <h2 class="modal-title">Add Password</h2>

@@ -85,13 +85,12 @@
     <!-- Sidebar -->
     <Grid col gap={4} align="start" class="sidebar-top grid">
       <Grid row fullWidth gap={2} align="center">
-        <Input placeholder="Search Password" style="flex-grow: 1; border-radius:0.5rem " />
+        <Input placeholder="Password" style="flex-grow: 1" />
         <Button
           size="md"
           iconLeft={PlusIcon}
           iconSize={23}
           tooltip="Add Password to current Vault"
-          style="border-radius: 0.5rem;"
           onclick={() => (addPasswordModalOpen = true)}
         />
       </Grid>
@@ -111,7 +110,6 @@
           {:else}
             {#each Object.entries(passwords.value) as [title, password]}
               <ListButton
-                class="list-button"
                 icon={KeyIcon}
                 onclick={() => {
                   selectedPassword = title
@@ -188,7 +186,7 @@
               Password Strength: {currentPasswordSecurity.strength}
             </p>
 
-            <PasswordChecks bind:currentPasswordSecurity />
+            <PasswordChecks bind:currentPasswordSecurity={passwords.value[selectedPassword]} />
 
             <Grid row fullWidth justify="between" style="margin-top: auto">
               <Button
