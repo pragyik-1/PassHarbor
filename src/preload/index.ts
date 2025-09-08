@@ -16,12 +16,6 @@ const api = {
     delete(vault: string = 'main', passwordFor: string): Promise<boolean> {
       return ipcRenderer.invoke('password:delete', vault, passwordFor)
     },
-    encrypt(password: string): Promise<string> {
-      return ipcRenderer.invoke('password:encryptAndDecrypt', password)
-    },
-    decrypt(password: string): Promise<string> {
-      return ipcRenderer.invoke('password:encryptAndDecrypt', password)
-    },
     change(vault: string = 'main', passwordFor: string, newPassword: string): Promise<boolean> {
       return ipcRenderer.invoke('password:change', vault, passwordFor, newPassword)
     }

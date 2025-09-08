@@ -11,10 +11,7 @@
     <form
       onsubmit={async () => {
         try {
-          await window.api.masterPassword.create(
-            await window.api.password.encrypt(passwordName)
-          )
-          localStorage.setItem('masterPassword', await window.api.password.encrypt(passwordName))
+          await window.api.masterPassword.create(passwordName)
         } catch (error) {
           console.error('Error writing file:', error)
         }

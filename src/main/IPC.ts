@@ -8,7 +8,7 @@ import {
   getVaults,
   savePasswordIfMissing
 } from '../utils/password-utils'
-import { encrypt } from '../utils/encryptor'
+import { decrypt, encrypt } from '../utils/encryptor'
 import { Dir } from '../utils/path-helper'
 import { MasterPasswordPath, VaultsDir } from './global.js'
 import { setSettings, getSettings } from '../utils/settings'
@@ -41,10 +41,6 @@ ipcMain.handle('password:all', async (_, vault = 'main') => {
   return await getPasswords(vault)
 })
 
-ipcMain.handle('password:encryptAndDecrypt', (_, password) => {
-  return encrypt(password)
-})
-
 ipcMain.handle('password:change', async (_, vault = 'main', passwordFor, password) => {
   return await changePassword(vault, passwordFor, password)
 })
@@ -54,11 +50,12 @@ ipcMain.handle('masterpassword:exists', async () => {
 })
 
 ipcMain.handle('masterpassword:create', async (_, password) => {
-  return await MasterPasswordPath.write(password)
+  const encryptedPassword = encrypt(password)
+  return await MasterPasswordPath.write(encryptedPassword)
 })
 
 ipcMain.handle('masterpassword:get', async () => {
-  return await MasterPasswordPath.read()
+  return decrypt(await MasterPasswordPath.read())
 })
 
 ipcMain.handle('vault:exists', async (_, vault = 'main') => {

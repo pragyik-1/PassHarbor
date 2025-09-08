@@ -28,6 +28,7 @@ export const DefaultSettings = {
 // Helper function
 export async function initSettings() {
   if (!(await SettingsFile.exists())) {
+    await SettingsFile.create()
     await SettingsFile.write(DefaultSettings)
   }
 }

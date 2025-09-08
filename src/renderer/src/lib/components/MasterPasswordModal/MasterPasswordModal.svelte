@@ -12,9 +12,7 @@
     <form
       onsubmit={async (e) => {
         e.preventDefault()
-        storedPassword = await window.api.password.decrypt(
-          await window.api.masterPassword.get()
-        )
+        storedPassword = await window.api.masterPassword.get()
 
         if (passwordName === storedPassword) {
           open = false

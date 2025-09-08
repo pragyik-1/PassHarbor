@@ -9,8 +9,6 @@ declare global {
         get: (vault: string, passwordFor: string) => Promise<string | undefined>
         all: (vault: string) => Promise<Record<string, string>>
         delete: (vault: string, passwordFor: string) => Promise<boolean>
-        encrypt: (password: string) => Promise<string>
-        decrypt: (password: string) => Promise<string>
         change: (vault: string, passwordFor: string, newPassword: string) => Promise<boolean>
       }
       masterPassword: {
