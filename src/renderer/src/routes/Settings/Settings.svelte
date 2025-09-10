@@ -19,6 +19,7 @@
         e.preventDefault()
         const settingsToSave = JSON.parse(JSON.stringify(newSettings))
         await window.api.settings.set(settingsToSave)
+        _settings.value = settings
       }}
     >
       <SettingsCategory title="General Settings" />
