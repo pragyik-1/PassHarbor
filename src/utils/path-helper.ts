@@ -116,7 +116,7 @@ class File extends Path {
     }
   }
 
-  async read(encoding: BufferEncoding = 'utf-8'): Promise<any> {
+  async read(encoding: BufferEncoding = 'utf-8'): Promise<string> {
     return fs.readFile(this.toString(), encoding)
   }
 
@@ -145,9 +145,10 @@ class File extends Path {
     await fs.rename(this.toString(), target)
   }
 
-  async create(recursive = true): Promise<void> {
+  async create(recursive = true): Promise<this> {
     await fs.mkdir(path.dirname(this.toString()), { recursive })
     await fs.writeFile(this.toString(), '')
+    return this
   }
 }
 
@@ -251,8 +252,9 @@ class Dir extends Path {
     await fs.cp(this.toString(), target, { recursive: true })
   }
 
-  async create(recursive = true): Promise<void> {
+  async create(recursive = true): Promise<this> {
     await fs.mkdir(this.toString(), { recursive })
+    return this
   }
 
   async moveTo(target: string): Promise<void> {
@@ -271,7 +273,6 @@ class Dir extends Path {
     return results.map((p: string) => new Path(path.join(this.toString(), p)))
   }
 
-  // In Dir class
   async walk(callback: (item: File | Dir) => Promise<void> | void): Promise<void> {
     const items = await this.list()
     for (const item of items) {
@@ -286,9 +287,6 @@ class Dir extends Path {
 class Json extends File {
   constructor(p: string | Path) {
     super(p)
-    if (this.ext() !== '.json') {
-      throw new Error(`Not a valid JSON file: ${this.toString()}`)
-    }
   }
 
   static __from(p: string | Path): Json {
@@ -306,9 +304,10 @@ class Json extends File {
     return super.write(JSON.stringify(data), encoding)
   }
 
-  async create(recursive = true): Promise<void> {
+  async create(recursive = true): Promise<this> {
     await fs.mkdir(path.dirname(this.toString()), { recursive })
     await fs.writeFile(this.toString(), '{}')
+    return this
   }
 }
 

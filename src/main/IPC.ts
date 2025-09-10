@@ -10,7 +10,7 @@ import {
 } from '../utils/password-utils'
 import { decrypt, encrypt } from '../utils/encryptor'
 import { Dir } from '../utils/path-helper'
-import { MasterPasswordPath, VaultsDir } from './global.js'
+import { MasterPasswordFile, VaultsDir } from './global.js'
 import { setSettings, getSettings } from '../utils/settings'
 
 ipcMain.handle('dialog:selectFile', async (_, options) => {
@@ -46,16 +46,16 @@ ipcMain.handle('password:change', async (_, vault = 'main', passwordFor, passwor
 })
 
 ipcMain.handle('masterpassword:exists', async () => {
-  return await MasterPasswordPath.exists()
+  return await MasterPasswordFile.exists()
 })
 
 ipcMain.handle('masterpassword:create', async (_, password) => {
   const encryptedPassword = encrypt(password)
-  return await MasterPasswordPath.write(encryptedPassword)
+  return await MasterPasswordFile.write(encryptedPassword)
 })
 
 ipcMain.handle('masterpassword:get', async () => {
-  return decrypt(await MasterPasswordPath.read())
+  return decrypt(await MasterPasswordFile.read())
 })
 
 ipcMain.handle('vault:exists', async (_, vault = 'main') => {

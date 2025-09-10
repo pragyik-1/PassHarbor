@@ -40,4 +40,5 @@ await initSettings()
 const settings = await SettingsFile.read<Settings>()
 
 export const VaultsDir = new Dir(settings.vaults.saveLocation)
-export const MasterPasswordPath = new File(settings.masterPassword.saveLocation)
+export const MasterPasswordFile = new File(settings.masterPassword.saveLocation)
+export const MasterMetaFile = new File(RootDir.join('MasterMeta')) // Stores some additional info such as salts
