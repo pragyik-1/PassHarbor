@@ -202,24 +202,24 @@ class Dir extends Path {
     const allDirs: Dir[] = []
     const entries = await fs.readdir(dirPath, { withFileTypes: true })
 
-    //
     const promises = entries.map(async (entry) => {
       const fullPath = path.join(dirPath, entry.name)
       if (entry.isFile()) {
         allFiles.push(new File(fullPath))
+        return Promise.resolve()
       } else if (entry.isDirectory()) {
         allDirs.push(new Dir(fullPath))
-        // Recursively call for subdirectories and return the promise
         return this._listAllDeep(fullPath)
       }
+      // If none of the above, return a resolved promise to be safe
+      return Promise.resolve()
     })
 
-    // Wait for all promises to resolve
     const nestedResults = await Promise.all(promises)
 
-    // Merge the results from the nested directories
     for (const result of nestedResults) {
-      if (result) {
+      // Check if the result is valid before trying to merge
+      if (result && 'files' in result && 'dirs' in result) {
         allFiles.push(...result.files)
         allDirs.push(...result.dirs)
       }

@@ -4,7 +4,7 @@ import { app } from 'electron'
 export const RootDir = new Path(`${app.getPath('userData')}/logsafe`)
 
 export const DefaultSettings = {
-  darkMode: false,
+  darkMode: true,
   vaults: {
     all: [],
     main: 'main',

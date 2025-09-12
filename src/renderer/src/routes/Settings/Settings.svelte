@@ -27,8 +27,8 @@
         <Switch bind:checked={newSettings.masterPassword.enabled} />
       </SettingsItem>
       {#if newSettings.masterPassword.enabled}
-        <SettingsItem title="Master Password Save Location">
-          <DirInput bind:value={newSettings.masterPassword.saveLocation} />
+        <SettingsItem title="Master Password Save File">
+          <Input type="file" bind:value={newSettings.masterPassword.saveLocation} />
         </SettingsItem>
         <SettingsItem title="Save Master Password: ">
           <Button

@@ -15,10 +15,10 @@ export async function refreshVault(vault: string): Promise<void> {
 }
 
 export function generatePassword(length = 16): string {
-  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-  const lower = 'abcdefghijklmnopqrstuvwxyz'
-  const digits = '0123456789'
-  const symbols = '_-.'
+  const upper = settings.value.passwordGenerator.upper ? 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' : ""
+  const lower = settings.value.passwordGenerator.lower ?'abcdefghijklmnopqrstuvwxyz' : ""
+  const digits = settings.value.passwordGenerator.digits ? '0123456789' : ""
+  const symbols = settings.value.passwordGenerator.symbolsToUse
 
   const all = upper + lower + digits + symbols
   const getRandomChar = (chars: string) =>
