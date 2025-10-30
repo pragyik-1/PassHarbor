@@ -1,13 +1,19 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync, CipherGCMTypes } from 'crypto'
-import { MasterMetaFile } from '../main/global'
+import { MasterMetaFile, MasterPasswordFile, SettingsFile } from '../main/global'
+
 
 const ALGORITHM: CipherGCMTypes = 'aes-256-gcm'
-const SECRET_KEY_LENGTH = 32
-const IV_LENGTH = 16
+const KEY_LEN = 32
+const IV_LEN = 12
+const PER_MSG_SALT_LEN = 16
 
-if (!await MasterMetaFile.exists()) {
-  await MasterMetaFile.create()
+const SCRYPT_PARAMS = {
+  N: 16384,
+  r: 8,
+  p: 1,
+  maxmem: 32 * 1024 * 1024
 }
+
 
 export const randomChars = (length: number) => {
   if (length <= 0) {
@@ -26,47 +32,95 @@ export const randomChars = (length: number) => {
 
   return result
 }
-
+await MasterMetaFile.ensure()
+let masterSecret: string
 let passphrase: string
 let salt: string
 
-const metaFileContents = await MasterMetaFile.read() || ""
-if (metaFileContents.trim() !== "") {
-  [passphrase, salt] = metaFileContents.split(":")
+const settings = await SettingsFile.read<Settings>()
+if (settings.masterPassword.enabled && (await MasterPasswordFile.exists())) {
+  const userPass = (await MasterPasswordFile.read())?.toString().trim()
+  if (!userPass) throw new Error('Master password is enabled but file is empty')
+  masterSecret = userPass
 } else {
-  passphrase = randomChars(32)
-  salt = randomChars(32)
-  await MasterMetaFile.write(`${passphrase}:${salt}:`)
+  const metaContents = (await MasterMetaFile.read())?.toString().trim()
+  if (metaContents) {
+    masterSecret = metaContents.split(':')[0]
+  } else {
+    masterSecret = randomChars(64)
+    await MasterMetaFile.write(`${masterSecret}:`)
+  }
 }
 
-const key = scryptSync(passphrase, salt, SECRET_KEY_LENGTH)
+function deriveKey(master: string, salt: Buffer): Buffer {
+  return scryptSync(master, salt, KEY_LEN, SCRYPT_PARAMS)
+}
 
 export function encrypt(text: string): string {
   if (typeof text !== 'string') {
-    throw new Error(`encrypt expected a string but got ${typeof text}`)
+    throw new Error(`encrypt expected string, got ${typeof text}`)
   }
-  const iv = randomBytes(IV_LENGTH)
-  const cipher = createCipheriv(ALGORITHM, key, iv)
-  let encrypted = cipher.update(text, 'utf8', 'hex')
-  encrypted += cipher.final('hex')
-  const tag = cipher.getAuthTag()
-  return `${iv.toString('hex')}:${encrypted}:${tag.toString('hex')}`
+
+  const perMsgSalt = randomBytes(PER_MSG_SALT_LEN)
+  const iv = randomBytes(IV_LEN)
+  const key = deriveKey(masterSecret, perMsgSalt)
+
+  try {
+    const cipher = createCipheriv(ALGORITHM, key, iv)
+    let encrypted = cipher.update(text, 'utf8', 'hex')
+    encrypted += cipher.final('hex')
+    const tag = cipher.getAuthTag()
+
+    const payload = {
+      v: 2,
+      kdf: { N: SCRYPT_PARAMS.N, r: SCRYPT_PARAMS.r, p: SCRYPT_PARAMS.p },
+      salt: perMsgSalt.toString('hex'),
+      iv: iv.toString('hex'),
+      ct: encrypted,
+      tag: tag.toString('hex')
+    }
+
+    return Buffer.from(JSON.stringify(payload)).toString('base64')
+  } finally {
+    key.fill(0)
+  }
 }
 
-export function decrypt(text: string): string {
-  if (typeof text !== 'string') {
-    throw new Error(`decrypt expected a string but got ${typeof text}`)
+export function decrypt(encoded: string): string {
+  if (typeof encoded !== 'string') {
+    throw new Error(`decrypt expected string, got ${typeof encoded}`)
   }
-  const parts = text.split(':')
-  if (parts.length !== 3) {
-    throw new Error('Invalid encrypted text format')
+
+  let payload
+  try {
+    payload = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'))
+  } catch {
+    throw new Error('Invalid ciphertext format')
   }
-  const iv = Buffer.from(parts[0], 'hex')
-  const encrypted = parts[1]
-  const tag = Buffer.from(parts[2], 'hex')
-  const decipher = createDecipheriv(ALGORITHM, key, iv)
-  decipher.setAuthTag(tag)
-  let decrypted = decipher.update(encrypted, 'hex', 'utf8')
-  decrypted += decipher.final('utf8')
-  return decrypted
+
+  if (!payload || payload.v !== 2) {
+    throw new Error('Unsupported ciphertext version')
+  }
+
+  const { salt, iv, ct, tag } = payload
+  if (!salt || !iv || !ct || !tag) {
+    throw new Error('Corrupt ciphertext payload')
+  }
+
+  const perMsgSalt = Buffer.from(salt, 'hex')
+  const ivBuf = Buffer.from(iv, 'hex')
+  const tagBuf = Buffer.from(tag, 'hex')
+  const key = deriveKey(masterSecret, perMsgSalt)
+
+  try {
+    const decipher = createDecipheriv(ALGORITHM, key, ivBuf)
+    decipher.setAuthTag(tagBuf)
+    let decrypted = decipher.update(ct, 'hex', 'utf8')
+    decrypted += decipher.final('utf8')
+    return decrypted
+  } catch {
+    throw new Error('Decryption failed (wrong key or corrupted data)')
+  } finally {
+    key.fill(0)
+  }
 }

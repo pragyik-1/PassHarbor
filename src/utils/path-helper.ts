@@ -8,8 +8,12 @@ import { glob } from 'glob'
 class Path {
   protected _path: string
 
-  constructor(p: string | Path) {
+  protected constructor(p: string | Path) {
     this._path = path.normalize(typeof p === 'string' ? p : p.toString())
+  }
+
+  static at(p: string | Path): Path {
+    return new Path(p)
   }
 
   valueOf(): string {
@@ -70,7 +74,7 @@ class Path {
     }
   }
 
-  async isFile() {
+  async isFile(): Promise<boolean> {
     try {
       return (await fs.stat(this._path)).isFile()
     } catch {
@@ -78,7 +82,7 @@ class Path {
     }
   }
 
-  async isDirectory() {
+  async isDirectory(): Promise<boolean> {
     try {
       return (await fs.stat(this._path)).isDirectory()
     } catch {
@@ -94,26 +98,23 @@ class Path {
     return fs.lstat(this._path)
   }
 
-  as<T extends Path>(type: { __from: (p: string) => T }): T {
-    return type.__from(this.toString())
+  /* Takes any type of path including Files and Dirs and coerces it as a different one. */
+  as<T extends Path>(type: { at: (p: string) => T }): T {
+    return type.at(this.toString())
   }
 }
 
 class File extends Path {
-  constructor(p: string | Path) {
+  protected constructor(p: string | Path) {
     super(p)
   }
 
-  static __from(p: string | Path): File {
+  static at(p: string | Path): File {
     return new File(p)
   }
 
-  async exists() {
-    try {
-      return (await fs.stat(this.toString())).isFile()
-    } catch {
-      return false
-    }
+  async exists(): Promise<boolean> {
+    return this.isFile()
   }
 
   async read(encoding: BufferEncoding = 'utf-8'): Promise<string> {
@@ -150,65 +151,68 @@ class File extends Path {
     await fs.writeFile(this.toString(), '')
     return this
   }
+
+  async ensure(): Promise<this> {
+    if (!(await this.exists())) {
+      await this.create()
+    }
+    return this
+  }
 }
 
-class Dir extends Path {
-  constructor(p: string | Path) {
+class Directory extends Path {
+  protected constructor(p: string | Path) {
     super(p)
   }
 
-  static __from(p: string | Path): Dir {
-    return new Dir(p)
+  static at(p: string | Path): Directory {
+    return new Directory(p)
   }
 
-  async exists() {
-    try {
-      return (await fs.stat(this.toString())).isDirectory()
-    } catch {
-      return false
-    }
+  async exists(): Promise<boolean> {
+    return this.isDirectory()
   }
 
   async listFiles(): Promise<File[]> {
     const entries = await fs.readdir(this.toString(), { withFileTypes: true })
     const files = entries.filter((entry) => entry.isFile())
-    return files.map((entry) => new File(path.join(this.toString(), entry.name)))
+    return files.map((entry) => File.at(path.join(this.toString(), entry.name)))
   }
 
   // Lists directories in the current directory only.
-  async listDirs(): Promise<Dir[]> {
+  async listDirs(): Promise<Directory[]> {
     const entries = await fs.readdir(this.toString(), { withFileTypes: true })
     const dirs = entries.filter((entry) => entry.isDirectory())
-    return dirs.map((entry) => new Dir(path.join(this.toString(), entry.name)))
+    return dirs.map((entry) => new Directory(path.join(this.toString(), entry.name)))
   }
 
   // Lists files and directories in the current directory only.
-  async list(): Promise<(File | Dir)[]> {
+  async list(): Promise<(File | Directory)[]> {
     const entries = await fs.readdir(this.toString(), { withFileTypes: true })
-    const filesAndDirs: (File | Dir)[] = []
+    const filesAndDirs: (File | Directory)[] = []
     for (const entry of entries) {
       const fullPath = path.join(this.toString(), entry.name)
       if (entry.isFile()) {
-        filesAndDirs.push(new File(fullPath))
+        filesAndDirs.push(File.at(fullPath))
       } else if (entry.isDirectory()) {
-        filesAndDirs.push(new Dir(fullPath))
+        filesAndDirs.push(new Directory(fullPath))
       }
     }
     return filesAndDirs
   }
 
-  private async _listAllDeep(dirPath: string): Promise<{ files: File[]; dirs: Dir[] }> {
+  private async _listAllDeep(dirPath: string): Promise<{ files: File[]; dirs: Directory[] }> {
     const allFiles: File[] = []
-    const allDirs: Dir[] = []
+    const allDirs: Directory[] = []
     const entries = await fs.readdir(dirPath, { withFileTypes: true })
 
     const promises = entries.map(async (entry) => {
       const fullPath = path.join(dirPath, entry.name)
       if (entry.isFile()) {
-        allFiles.push(new File(fullPath))
+        allFiles.push(File.at(fullPath))
         return Promise.resolve()
       } else if (entry.isDirectory()) {
-        allDirs.push(new Dir(fullPath))
+        allDirs.push(new Directory(fullPath))
         return this._listAllDeep(fullPath)
       }
       // If none of the above, return a resolved promise to be safe
@@ -231,11 +235,11 @@ class Dir extends Path {
     return (await this._listAllDeep(this.toString())).files
   }
 
-  async listDirsDeep(): Promise<Dir[]> {
+  async listDirsDeep(): Promise<Directory[]> {
     return (await this._listAllDeep(this.toString())).dirs
   }
 
-  async listDeep(): Promise<(File | Dir)[]> {
+  async listDeep(): Promise<(File | Directory)[]> {
     const { files, dirs } = await this._listAllDeep(this.toString())
     return [...files, ...dirs]
   }
@@ -273,23 +277,30 @@ class Dir extends Path {
     return results.map((p: string) => new Path(path.join(this.toString(), p)))
   }
 
-  async walk(callback: (item: File | Dir) => Promise<void> | void): Promise<void> {
+  async walk(callback: (item: File | Directory) => Promise<void> | void): Promise<void> {
     const items = await this.list()
     for (const item of items) {
       await callback(item)
-      if (item instanceof Dir) {
+      if (item instanceof Directory) {
         await item.walk(callback)
       }
     }
   }
+
+  async ensure(): Promise<this> {
+    if (!(await this.exists())) {
+      await this.create()
+    }
+    return this
+  }
 }
 
 class Json extends File {
-  constructor(p: string | Path) {
+  protected constructor(p: string | Path) {
     super(p)
   }
 
-  static __from(p: string | Path): Json {
+  static at(p: string | Path): Json {
     return new Json(p)
   }
 
@@ -311,7 +322,7 @@ class Json extends File {
   }
 }
 
-class TempDir extends Dir {
+class TempDir extends Directory {
   constructor() {
     const tempPath = path.join(os.tmpdir(), `temp-${randomUUID()}`)
     super(tempPath)
@@ -326,4 +337,4 @@ class TempDir extends Dir {
   }
 }
 
-export { Path, File, Dir, Json, TempDir }
+export { Path, File, Directory, Json, TempDir }

@@ -1,7 +1,7 @@
-import { Path, File, Dir, Json } from '../utils/path-helper'
+import { Path, File, Directory, Json } from '../utils/path-helper'
 import { app } from 'electron'
 
-export const RootDir = new Path(`${app.getPath('userData')}/logsafe`)
+export const RootDir = Path.at(`${app.getPath('userData')}/logsafe_test`)
 
 export const DefaultSettings = {
   darkMode: true,
@@ -33,12 +33,12 @@ export async function initSettings() {
   }
 }
 
-export const SettingsFile = new Json(RootDir.join('settings.json'))
+export const SettingsFile = Json.at(RootDir.join('settings.json'))
 
 await initSettings()
 
 const settings = await SettingsFile.read<Settings>()
 
-export const VaultsDir = new Dir(settings.vaults.saveLocation)
-export const MasterPasswordFile = new File(settings.masterPassword.saveLocation)
-export const MasterMetaFile = new File(RootDir.join('MasterMeta')) // Stores some additional info such as salts
+export const VaultsDir = Directory.at(settings.vaults.saveLocation)
+export const MasterPasswordFile = File.at(settings.masterPassword.saveLocation)
+export const MasterMetaFile = File.at(RootDir.join('MasterMeta')) // Stores some additional info such as salts

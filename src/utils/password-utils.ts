@@ -1,5 +1,5 @@
 import { encrypt, decrypt, randomChars } from './encryptor'
-import { Dir, Json } from '../utils/path-helper'
+import { Directory, Json } from '../utils/path-helper'
 import { VaultsDir } from '../main/global.js'
 import { createHash } from 'crypto'
 
@@ -9,16 +9,16 @@ function hashTitle(title: string): string {
 
 /** Load encrypted vault from disk. */
 async function loadVault(vault: string): Promise<{ hash: string; key: string; value: string }[]> {
-  const vaultPath = new Dir(VaultsDir.join(vault))
-  const passwordPath = new Json(vaultPath.join('passwords.json'))
+  const vaultPath = Directory.at(VaultsDir.join(vault))
+  const passwordPath = Json.at(vaultPath.join('passwords.json'))
   if (!(await passwordPath.exists())) return []
   return (await passwordPath.read()) || []
 }
 
 export async function createVault(vault: string): Promise<boolean> {
-  const vaultPath = await new Dir(VaultsDir.join(vault)).create()
-  const metaFile = new Json(VaultsDir.join())
-  const passwordPath = new Json(vaultPath.join('passwords.json'))
+  const vaultPath = await Directory.at(VaultsDir.join(vault)).create()
+  const metaFile = Json.at(VaultsDir.join())
+  const passwordPath = Json.at(vaultPath.join('passwords.json'))
   try {
     if (await passwordPath.exists()) return false
     if (await metaFile.exists()) return false
@@ -36,7 +36,7 @@ async function saveVault(
   vault: string,
   data: { hash: string; key: string; value: string }[]
 ): Promise<boolean> {
-  const passwordPath = new Json(VaultsDir.join(vault, 'passwords.json'))
+  const passwordPath = Json.at(VaultsDir.join(vault, 'passwords.json'))
   try {
     await passwordPath.create()
     await passwordPath.write(data)
@@ -64,7 +64,7 @@ export async function savePassword(
       data[existingEntryIndex].value = encrypt(password)
       data[existingEntryIndex].key = encrypt(passwordFor) // Also update the key, as it's non-deterministic
     } else {
-      // Add a new password entry
+      // Add a password entry
       data.push({
         hash: passwordHash,
         key: encrypt(passwordFor),
@@ -120,13 +120,16 @@ export async function deletePassword(vault = 'main', passwordFor: string): Promi
     const data = await loadVault(vault)
     const passwordHash = hashTitle(passwordFor)
     const initialLength = data.length
-    const newData = data.filter((item) => item.hash !== passwordHash)
+    const
+      Data = data.filter((item) => item.hash !== passwordHash)
 
-    if (newData.length === initialLength) {
+    if (
+      Data.length === initialLength) {
       return false // Password not found
     }
 
-    return await saveVault(vault, newData)
+    return await saveVault(vault,
+      Data)
   } catch (error) {
     console.error(`Error deleting password for "${passwordFor}" in vault "${vault}":`, error)
     return false
@@ -136,17 +139,17 @@ export async function deletePassword(vault = 'main', passwordFor: string): Promi
 export async function changePassword(
   vault = 'main',
   passwordFor: string,
-  newPassword: string
+  Password: string
 ): Promise<boolean> {
   try {
     const keyHash = hashTitle(passwordFor) // Use the deterministic hash to find the entry
     const data = await loadVault(vault)
-    if (!(keyHash in data)) {
+    const idx = data.findIndex((entry) => entry.hash === keyHash)
+    if (idx === -1) {
       console.error(`Password for "${passwordFor}" not found.`)
       return false
     }
-    const encryptedValue = encrypt(newPassword)
-    data[keyHash] = encryptedValue
+    data[idx].value = encrypt(Password)
     return await saveVault(vault, data)
   } catch (error) {
     console.error(`Error changing password for "${passwordFor}" in vault "${vault}":`, error)

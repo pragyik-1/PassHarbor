@@ -9,7 +9,7 @@ import {
   savePasswordIfMissing
 } from '../utils/password-utils'
 import { decrypt, encrypt } from '../utils/encryptor'
-import { Dir } from '../utils/path-helper'
+import { Directory } from '../utils/path-helper'
 import { MasterPasswordFile, VaultsDir } from './global.js'
 import { setSettings, getSettings } from '../utils/settings'
 
@@ -67,7 +67,7 @@ ipcMain.handle('vault:create', async (_, vault = 'main') => {
 })
 
 ipcMain.handle('vault:delete', async (_, vault = 'main') => {
-  const _vault = VaultsDir.join(vault).as(Dir)
+  const _vault = VaultsDir.join(vault).as(Directory)
   return await _vault.remove()
 })
 
