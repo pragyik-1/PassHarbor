@@ -14,7 +14,7 @@ declare global {
       masterPassword: {
         create: (password: string) => Promise<boolean>
         exists: () => Promise<boolean>
-        get: () => Promise<string | undefined>
+        verify: (password: string) => Promise<boolean>
       }
       vault: {
         getAll: () => Promise<string[]>

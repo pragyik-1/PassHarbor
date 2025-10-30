@@ -28,8 +28,8 @@ const api = {
     exists(): Promise<boolean> {
       return ipcRenderer.invoke('masterpassword:exists')
     },
-    get(): Promise<string | undefined> {
-      return ipcRenderer.invoke('masterpassword:get')
+    verify(password: string): Promise<boolean> {
+      return ipcRenderer.invoke('masterpassword:verify', password)
     }
   },
 

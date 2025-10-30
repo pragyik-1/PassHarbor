@@ -19,8 +19,7 @@
     if (
       (await window.api.masterPassword.exists()) &&
       sessionStorage.getItem('haslogged') !== 'true' &&
-      settings.value.masterPassword.enabled &&
-      (await window.api.masterPassword.get()).trim() !== ''
+      settings.value.masterPassword.enabled
     ) {
       masterPasswordModalOpen = true
     } else {

@@ -8,10 +8,10 @@ import {
   getVaults,
   savePasswordIfMissing
 } from '../utils/password-utils'
-import { decrypt, encrypt } from '../utils/encryptor'
 import { Directory } from '../utils/path-helper'
-import { MasterPasswordFile, VaultsDir } from './global.js'
+import { MasterPasswordFile, VaultsDir } from './global'
 import { setSettings, getSettings } from '../utils/settings'
+import { createMasterPassword, verifyMasterPassword } from '../utils/master-password'
 
 ipcMain.handle('dialog:selectFile', async (_, options) => {
   try {
@@ -50,12 +50,11 @@ ipcMain.handle('masterpassword:exists', async () => {
 })
 
 ipcMain.handle('masterpassword:create', async (_, password) => {
-  const encryptedPassword = encrypt(password)
-  return await MasterPasswordFile.write(encryptedPassword)
+  return await createMasterPassword(password)
 })
 
-ipcMain.handle('masterpassword:get', async () => {
-  return decrypt(await MasterPasswordFile.read())
+ipcMain.handle('masterpassword:verify', async (_, password) => {
+  return verifyMasterPassword(password)
 })
 
 ipcMain.handle('vault:exists', async (_, vault = 'main') => {

@@ -34,15 +34,12 @@ export const randomChars = (length: number) => {
 }
 await MasterMetaFile.ensure()
 let masterSecret: string
-let passphrase: string
-let salt: string
 
-const settings = await SettingsFile.read<Settings>()
-if (settings.masterPassword.enabled && (await MasterPasswordFile.exists())) {
-  const userPass = (await MasterPasswordFile.read())?.toString().trim()
-  if (!userPass) throw new Error('Master password is enabled but file is empty')
-  masterSecret = userPass
-} else {
+export async function initEncryptor(): Promise<void> {
+  if (masterSecret) return // already initialized
+
+  await MasterMetaFile.ensure()
+
   const metaContents = (await MasterMetaFile.read())?.toString().trim()
   if (metaContents) {
     masterSecret = metaContents.split(':')[0]
@@ -50,6 +47,7 @@ if (settings.masterPassword.enabled && (await MasterPasswordFile.exists())) {
     masterSecret = randomChars(64)
     await MasterMetaFile.write(`${masterSecret}:`)
   }
+
 }
 
 function deriveKey(master: string, salt: Buffer): Buffer {

@@ -4,7 +4,6 @@
 
   let { open = $bindable(false) } = $props()
   let passwordName = $state('')
-  let storedPassword = $state('')
 </script>
 
 <Modal bind:isOpen={open} class="modal">
@@ -12,9 +11,9 @@
     <form
       onsubmit={async (e) => {
         e.preventDefault()
-        storedPassword = await window.api.masterPassword.get()
+        const correct = await window.api.masterPassword.verify(passwordName)
 
-        if (passwordName === storedPassword) {
+        if (correct) {
           open = false
           sessionStorage.setItem('haslogged', 'true')
         } else {
