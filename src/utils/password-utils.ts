@@ -1,4 +1,4 @@
-import { encrypt, decrypt, randomChars } from './encryptor'
+import { encrypt, decrypt } from './encryptor'
 import { Directory, Json } from '../utils/path-helper'
 import { VaultsDir } from '../main/global.js'
 import { createHash } from 'crypto'
@@ -12,17 +12,18 @@ async function loadVault(vault: string): Promise<{ hash: string; key: string; va
   const vaultPath = Directory.at(VaultsDir.join(vault))
   const passwordPath = Json.at(vaultPath.join('passwords.json'))
   if (!(await passwordPath.exists())) return []
-  return (await passwordPath.read()) || []
+  const data = await passwordPath.read()
+  if (Array.isArray(data)) {
+    return data
+  }
+  return []
 }
 
 export async function createVault(vault: string): Promise<boolean> {
-  const vaultPath = await Directory.at(VaultsDir.join(vault)).create()
-  const metaFile = Json.at(VaultsDir.join())
+  const vaultPath = await VaultsDir.join(vault).as(Directory).ensure()
   const passwordPath = Json.at(vaultPath.join('passwords.json'))
   try {
     if (await passwordPath.exists()) return false
-    if (await metaFile.exists()) return false
-    await (await (metaFile.create())).write(randomChars(32))
     await passwordPath.create()
     return true
   } catch (err) {
