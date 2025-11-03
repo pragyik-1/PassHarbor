@@ -2,4 +2,4 @@
   let { title } = $props()
 </script>
 
-<p style="margin-top: 2rem; margin-bottom: 2rem; font-weight: 600; font-size: 1.25rem">{title}</p>
+<p style="margin-bottom: 2rem; font-weight: 600; font-size: 1.25rem">{title}</p>

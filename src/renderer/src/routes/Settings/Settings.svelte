@@ -26,7 +26,7 @@
       await saveSettings()
     }}
   >
-    <Grid col gap={6} align="start">
+    <Grid col gap={6}>
       <Card fullWidth>
         <SettingsCategory title="General Settings" />
         <SettingsItem title="Master Password Enabled">
@@ -47,7 +47,7 @@
       <Card fullWidth>
         <SettingsCategory title="Password Generator Settings" />
         <SettingsItem title="Length">
-          <Input type="number" bind:value={newSettings.passwordGenerator.length} />
+          <Input id="password-length" type="number" bind:value={newSettings.passwordGenerator.length} />
         </SettingsItem>
         <SettingsItem title="Symbols to be used (other than a-z, A-Z, 0-9)">
           <Input bind:value={newSettings.passwordGenerator.symbolsToUse} />
@@ -68,7 +68,7 @@
       <Card fullWidth>
         <SettingsCategory title="Vault Settings" />
         <SettingsItem title="Vault Save Location">
-          <DirInput bind:value={newSettings.vaults.saveLocation} />
+          <DirInput id="vault-location" bind:value={newSettings.vaults.saveLocation} />
         </SettingsItem>
         <SettingsItem title="Main Vault">
           <Input bind:value={newSettings.vaults.main} />
@@ -90,7 +90,9 @@
         </Accordion>
       </Card>
     </Grid>
-    <Button type="submit" size="lg" style="margin-top: 1.5rem; width: 100%;">Save All Settings</Button>
+    <Button type="submit" size="lg" style="margin-top: 1.5rem; width: 100%;"
+      >Save All Settings</Button
+    >
   </form>
 </main>
 

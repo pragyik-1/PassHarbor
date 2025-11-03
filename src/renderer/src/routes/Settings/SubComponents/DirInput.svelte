@@ -1,10 +1,10 @@
 <script lang="ts">
   import { Grid, Input } from '../../../lib'
 
-  let { value = $bindable() } = $props()
+  let { value = $bindable(), id = 'dir-input' } = $props()
 </script>
 
 <Grid col>
-  <Input type="directory" webkitdirectory bind:value />
+  <Input {id} type="directory" webkitdirectory bind:value />
   <p class="description-text">currently: {value}</p>
 </Grid>
