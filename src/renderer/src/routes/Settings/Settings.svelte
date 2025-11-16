@@ -6,6 +6,7 @@
   import SettingsCategory from './SubComponents/SettingsCategory.svelte'
   import AddMasterPasswordModal from '../../lib/components/AddMasterPasswordModal/AddMasterPasswordModal.svelte'
   import { XIcon } from 'lucide-svelte'
+  import "./Settings.css"
 
   let newSettings: Settings = $state(JSON.parse(JSON.stringify(globalSettings.value)))
   let modalOpen = $state(false)
@@ -99,18 +100,7 @@
 <AddMasterPasswordModal open={modalOpen} />
 
 <style>
-  .settings-page {
-    margin-top: 4.5rem;
-    padding: 0 2rem;
-    width: 100%;
-    max-width: 1200px;
-    margin-left: auto;
-    margin-right: auto;
-  }
   h1 {
     margin-bottom: 1.5rem;
-  }
-  .grid-col-span-2 {
-    grid-column: span 2;
   }
 </style>

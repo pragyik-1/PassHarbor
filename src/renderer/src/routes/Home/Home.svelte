@@ -35,6 +35,10 @@
   let editMode = $state(false)
   let showPassword = $state(false)
   let originalPassword = $state('')
+  let searchQuery = $state('')
+  let matchedPasswords = $derived(
+    Object.entries(passwords.value).filter(([title]) => title.toLowerCase().includes(searchQuery))
+  )
 
   let currentPasswordSecurity = $derived(analyzePasswordSecurity(passwords.value[selectedPassword]))
 
@@ -85,7 +89,7 @@
     <!-- Sidebar -->
     <Grid col gap={4} align="start" class="sidebar-top grid">
       <Grid row fullWidth gap={2} align="center">
-        <Input placeholder="Password" style="flex-grow: 1" />
+        <Input placeholder="Password" bind:value={searchQuery} style="flex-grow: 1" />
         <Button
           size="md"
           iconLeft={PlusIcon}
@@ -101,14 +105,14 @@
           <p class="header-text">Saved Passwords</p>
         </Grid>
         <List style="width: 100%; flex: 1; overflow-y: auto;">
-          <!-- No Passwords Placeholder -->
           {#if Object.keys(passwords.value).length === 0}
             <div class="no-passwords-text">
               No passwords saved yet. Click <strong>+</strong> to add one.
             </div>
-            <!-- No Passwords Placeholder -->
+          {:else if matchedPasswords.length === 0}
+            <div class="no-passwords-text">No passwords match your search query.</div>
           {:else}
-            {#each Object.entries(passwords.value) as [title, password]}
+            {#each matchedPasswords as [title, password]}
               <ListButton
                 icon={KeyIcon}
                 onclick={() => {
