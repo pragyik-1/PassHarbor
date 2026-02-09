@@ -6,17 +6,19 @@
     class?: string
     style?: string
     ariaLabel?: string
+    gap?: number
   }
 
   let {
     children,
     class: _class = '',
     style = '',
-    ariaLabel = 'List of items'
+    ariaLabel = 'List of items',
+    gap = 0
   }: ListProps = $props()
 </script>
 
-<Grid col class={`list-container ${_class}`} {style} role="list" {ariaLabel}>
+<Grid col class={`list-container ${_class}`} {style} role="list" {ariaLabel} {gap}>
   {@render children?.()}
 </Grid>
 

@@ -86,8 +86,15 @@
   animation: spin 1s linear infinite;
 }
 
+/* Original active state */
 .button:active {
   transform: scale(0.95);
+}
+
+/* New class to disable the active animation */
+.button.no-active-animation:active {
+  transform: none; /* Override the transform */
+  transition: none; /* Also remove transition for immediate effect */
 }
 
 @keyframes spin {

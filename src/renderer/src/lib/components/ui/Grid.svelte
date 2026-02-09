@@ -30,36 +30,29 @@
     fullWidth = false
   }: GridProps = $props()
 
-  // Compute flex-direction from props
-  let flexDirection = $state('row')
-  if (column || col) {
-    flexDirection = 'column'
-  }
-  if (row) {
-    flexDirection = 'row'
-  }
+  let flexDirection = $derived(column || col ? 'column' : 'row')
 
-  // Compute justify-content and convert into a class name
   const justifyContentClasses = {
     center: 'justify-center',
     end: 'justify-end',
     between: 'justify-between',
     around: 'justify-around',
-    evenly: 'justify-evenly'
+    evenly: 'justify-evenly',
+    start: 'justify-start'
   }
-  let justifyContentClass = $state(justifyContentClasses[justify] ?? 'justify-start')
+  let justifyContentClass = $derived(justifyContentClasses[justify] ?? 'justify-start')
 
-  // Compute align-items and convert into a class name
   const alignItemsClasses = {
     center: 'align-center',
     end: 'align-end',
     stretch: 'align-stretch',
-    baseline: 'align-baseline'
+    baseline: 'align-baseline',
+    start: 'align-start'
   }
 
-  let alignItemsClass = $state(alignItemsClasses[align] ?? 'align-start')
+  let alignItemsClass = $derived(alignItemsClasses[align] ?? 'align-start')
 
-  let wrapClass = row ? 'wrap' : ''
+  let wrapClass = $derived(row ? 'wrap' : '')
 </script>
 
 <div

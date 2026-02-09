@@ -30,13 +30,7 @@
     onclick = (): void => {}
   }: SwitchProps = $props()
 
-  let switchClasses = $state('switch-container')
-  if (fullwidth) {
-    switchClasses += ' switch-full-width'
-  }
-  if (_class) {
-    switchClasses += ` ${_class}`
-  }
+  let switchClasses = $derived(`switch-container ${fullwidth && 'switch-full-width'} ${_class}`)
 
   const handleChange = (event: Event): void => {
     if (disabled) return
@@ -61,10 +55,9 @@
       aria-checked={checked}
     />
     <span class="slider round">
-      {#if onLabel}
+      {#if checked && onLabel}
         <span class="switch-text on-text">{onLabel}</span>
-      {/if}
-      {#if offLabel}
+      {:else if !checked && offLabel}
         <span class="switch-text off-text">{offLabel}</span>
       {/if}
     </span>

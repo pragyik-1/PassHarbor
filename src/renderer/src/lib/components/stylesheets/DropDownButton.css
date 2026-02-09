@@ -1,13 +1,14 @@
 .dropdown-container {
   position: relative;
   display: inline-block;
+  z-index: 9999;
 }
 .dropdown-container.full {
   width: 100%;
 }
 .dropdown-menu {
   position: absolute;
-  z-index: 50;
+  z-index: 9999;
   margin-top: 0.5rem;
   display: flex;
   border-radius: 0.375rem;

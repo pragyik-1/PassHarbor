@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fly } from 'svelte/transition'
-  import { useTimeout, onEscapeKey, onClickOutside } from '../../utils'
+  import { useTimeout, onEscapeKey, onClickOutside } from '../../utils.js'
   import '../stylesheets/Snackbar.css'
 
   type SnackbarProps = {

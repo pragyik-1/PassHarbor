@@ -18,6 +18,7 @@
     ariaLabel?: string
     tooltip?: string
     loading?: boolean
+    disableActiveAnimation?: boolean
   }
 
   let {
@@ -35,11 +36,12 @@
     iconLeft = null,
     iconRight = null,
     tooltip = '',
-    loading = false
+    loading = false,
+    disableActiveAnimation = false
   }: ButtonProps = $props()
 
-  let icon = $state(iconLeft || iconRight)
-  let iconPosition = $state(iconLeft ? 'left' : 'right')
+  let icon = $derived(iconLeft || iconRight)
+  let iconPosition = $derived(iconLeft ? 'left' : 'right')
 
   $effect(() => {
     icon = iconLeft || iconRight
@@ -54,7 +56,7 @@
   title={tooltip}
   {type}
   {onclick}
-  class={`button ${variant} ${size} ${fullWidth ? 'full-width' : ''} ${_class}`}
+  class={`button ${variant} ${size} ${fullWidth ? 'full-width' : ''} ${_class} ${disableActiveAnimation ? 'no-active-animation' : ''}`}
 >
   <Grid row gap={4} style="flex-wrap: nowrap !important">
     {#if loading}
