@@ -26,7 +26,7 @@ thiserror = "2.0.21"
 argon2 = "0.6.0"
 hkdf = "0.13.0"
 sha2 = "0.11.1"
-rusqlite = "0.40.2"
+rusqlite = { version = "0.40.2", features = ["bundled-sqlcipher-vendored-openssl"] }
 zeroize = { version = "1.9.1", features = ["derive"] }
 secrecy = "0.10.3"
 chacha20poly1305 = "0.11.0"

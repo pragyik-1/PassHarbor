@@ -4,6 +4,10 @@ pub enum Error {
     Generic(String),
     #[error("Invalid master key")]
     InvalidMasterKey,
+    #[error("Database error: {0}")]
+    Database(String),
+    #[error("Migration error: {0}")]
+    Migration(String),
 }
 
 impl Error {

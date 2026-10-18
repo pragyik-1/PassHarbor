@@ -23,4 +23,13 @@ impl MasterKey {
             .map_err(|_| Error::new("Key derivation failed"))?;
         Ok(okm)
     }
+
+    /// HKDF expand with a salt, for per-vault keys
+    pub fn derive_with_salt(&self, info: &[u8], salt: &[u8]) -> Result<[u8; 32]> {
+        let hk = Hkdf::<Sha256>::new(Some(salt), &self.0);
+        let mut okm = [0u8; 32];
+        hk.expand(info, &mut okm)
+            .map_err(|_| Error::new("Key derivation failed"))?;
+        Ok(okm)
+    }
 }

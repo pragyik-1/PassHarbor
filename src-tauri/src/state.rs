@@ -2,9 +2,9 @@ use std::sync::Mutex;
 
 use tauri::{Manager, State};
 
+use crate::database::{Database, VaultStore};
 use crate::master_key::MasterKey;
 
-/// Salt plus the key derived from the user's passphrase.
 pub struct VaultAuth {
     pub salt: [u8; 16],
     pub master_key: MasterKey,
@@ -12,17 +12,19 @@ pub struct VaultAuth {
 
 pub struct AppState {
     pub vault: Mutex<Option<VaultAuth>>,
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            vault: Mutex::new(None),
-        }
-    }
+    pub db: Mutex<Option<Database>>,
+    pub vault_store: VaultStore,
 }
 
 impl AppState {
+    pub fn new(vault_store: VaultStore) -> Self {
+        Self {
+            vault: Mutex::new(None),
+            db: Mutex::new(None),
+            vault_store,
+        }
+    }
+
     pub fn resolve(app: &tauri::AppHandle) -> State<'_, AppState> {
         app.state::<AppState>()
     }
