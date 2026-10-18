@@ -5,9 +5,11 @@ use passharbor_lib::prelude::*;
 
 fn main() -> Result<()> {
     #[cfg(target_os = "linux")]
-    // Fix weird rendering bugs in wayland.
-    unsafe {
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    {
+        // Fix weird rendering bugs in wayland.
+        unsafe {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
     }
     passharbor_lib::run();
     Ok(())

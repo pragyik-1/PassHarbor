@@ -10,8 +10,8 @@ pub struct MasterKey {
 }
 
 impl MasterKey {
-    pub fn new(key: [u8; 32]) -> Self {
-        Self { key: Some(key) }
+    pub fn new() -> Self {
+        Self { key: None }
     }
 
     pub fn get_key(&self) -> Option<&[u8; 32]> {
@@ -20,14 +20,6 @@ impl MasterKey {
 
     pub fn set_key(&mut self, new_key: [u8; 32]) {
         self.key = Some(new_key);
-    }
-
-    pub fn is_zeroed(&self) -> bool {
-        if let Some(key) = &self.key {
-            key.iter().all(|&b| b == 0)
-        } else {
-            true
-        }
     }
 
     pub fn derive_db_key(&self) -> Result<DbKey> {

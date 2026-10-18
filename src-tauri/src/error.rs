@@ -1,4 +1,5 @@
 use tauri::Emitter;
+use anyhow;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -27,6 +28,12 @@ impl Error {
             Error::MissingEncKey => "Encryption key is missing".to_string(),
             Error::InvalidEncKey => "Encryption key is invalid".to_string(),
         }
+    }
+}
+
+impl Into<tauri::Error> for Error {
+    fn into(self) -> tauri::Error {
+        tauri::Error::from(anyhow::anyhow!(self.message()))
     }
 }
 
