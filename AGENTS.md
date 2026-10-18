@@ -56,3 +56,4 @@ src-tauri/src/
 - **Dead code is acceptable right now** (e.g. unused stubs like `vault.rs`); don't spend time removing it unless it blocks the task.
 - **Match existing style**: naming, formatting, module layout, and the conventions above take precedence over personal preference. Do not introduce new dependencies, patterns, or directory structures without asking.
 - **Ask, don't assume**: before making any non-obvious decision — new dependency, architecture change, ambiguous requirement, conflicting instructions — ask the user. Surface confusion early rather than guessing.
+- **Include no conversational context in generated code**: the generated code must not inlucde context from the user and model such as " // The changed F() function with the features you asked" and such.
