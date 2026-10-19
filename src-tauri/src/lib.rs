@@ -18,7 +18,13 @@ pub fn run() {
         })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            frontend_api::unlock_cmd
+            frontend_api::unlock_cmd,
+            frontend_api::add_entry_cmd,
+            frontend_api::list_entries_cmd,
+            frontend_api::get_entry_cmd,
+            frontend_api::update_entry_cmd,
+            frontend_api::delete_entry_cmd,
+            frontend_api::set_password_cmd
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

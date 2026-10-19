@@ -8,6 +8,10 @@ pub enum Error {
     Database(String),
     #[error("Migration error: {0}")]
     Migration(String),
+    #[error("Vault is locked")]
+    VaultLocked,
+    #[error("Entry {0} not found")]
+    EntryNotFound(i64),
 }
 
 impl Error {
