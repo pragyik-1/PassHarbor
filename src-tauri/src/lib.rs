@@ -1,7 +1,6 @@
 use tauri::Manager;
 
 mod database;
-mod encryptor;
 pub mod error;
 mod frontend_api;
 mod master_key;
@@ -16,9 +15,9 @@ pub fn run() {
             app.manage(state::AppState::new(database::VaultStore::new(vault_dir)));
             Ok(())
         })
-        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             frontend_api::unlock_cmd,
+            frontend_api::lock_cmd,
             frontend_api::add_entry_cmd,
             frontend_api::list_entries_cmd,
             frontend_api::get_entry_cmd,

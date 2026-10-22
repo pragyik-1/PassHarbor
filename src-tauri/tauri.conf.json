@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "passharbor",
+  "productName": "PassHarbor",
   "version": "0.1.0",
   "identifier": "com.hermitk.passharbor",
   "build": {
@@ -12,13 +12,25 @@
   "app": {
     "windows": [
       {
-        "title": "passharbor",
+        "title": "PassHarbor",
         "width": 800,
         "height": 600
       }
     ],
     "security": {
-      "csp": null
+      "csp": {
+        "default-src": "'self' customprotocol: asset:",
+        "connect-src": "ipc: http://ipc.localhost",
+        "img-src": "'self' asset: http://asset.localhost data:",
+        "style-src": "'unsafe-inline' 'self'"
+      },
+      "devCsp": {
+        "default-src": "'self' customprotocol: asset:",
+        "connect-src": "ipc: http://ipc.localhost http://localhost:1420 ws://localhost:1421",
+        "img-src": "'self' asset: http://asset.localhost data:",
+        "style-src": "'unsafe-inline' 'self'",
+        "script-src": "'self' 'unsafe-inline' 'unsafe-eval'"
+      }
     }
   },
   "bundle": {

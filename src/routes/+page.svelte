@@ -1,16 +1,40 @@
 <script lang="ts">
-  import { unlock } from "$lib/api";
+  import { lock, unlock } from "$lib/api";
 
   let passphrase = $state("");
   let error = $state("");
+  let busy = $state(false);
+  let vaultName = $state<string | null>(null);
+
+  const unlocked = $derived(vaultName !== null);
 
   async function submit(event: SubmitEvent) {
     event.preventDefault();
+    if (busy) return;
     error = "";
+    busy = true;
     try {
-      await unlock(passphrase);
+      vaultName = await unlock(passphrase);
+      // The passphrase is no longer needed: do not keep it around.
+      passphrase = "";
     } catch (e) {
       error = String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function lockVault() {
+    if (busy) return;
+    error = "";
+    busy = true;
+    try {
+      await lock();
+      vaultName = null;
+    } catch (e) {
+      error = String(e);
+    } finally {
+      busy = false;
     }
   }
 </script>
@@ -18,14 +42,22 @@
 <main class="container">
   <h1>PassHarbor</h1>
 
-  <form class="column" onsubmit={submit}>
-    <input
-      type="password"
-      placeholder="Master passphrase..."
-      bind:value={passphrase}
-    />
-    <button type="submit">Unlock</button>
-  </form>
+  {#if unlocked}
+    <div class="column">
+      <p class="status">Vault open: {vaultName}</p>
+      <button type="button" onclick={lockVault} disabled={busy}>Lock</button>
+    </div>
+  {:else}
+    <form class="column" onsubmit={submit}>
+      <input
+        type="password"
+        placeholder="Master passphrase..."
+        bind:value={passphrase}
+        disabled={busy}
+      />
+      <button type="submit" disabled={busy}>{busy ? "Unlocking..." : "Unlock"}</button>
+    </form>
+  {/if}
 
   {#if error}
     <p class="error">{error}</p>
@@ -77,8 +109,17 @@
     cursor: pointer;
   }
 
-  button:hover {
+  button:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  button:hover:not(:disabled) {
     border-color: #396cd8;
+  }
+
+  .status {
+    margin: 0;
   }
 
   .error {

@@ -12,11 +12,17 @@ pub enum Error {
     VaultLocked,
     #[error("Entry {0} not found")]
     EntryNotFound(i64),
+    #[error("Invalid vault id: {0}")]
+    InvalidVaultId(String),
+    #[error("Passphrase must be at least {0} characters")]
+    WeakPassphrase(usize),
+    #[error("Invalid entry: {0}")]
+    InvalidEntry(String),
 }
 
 impl Error {
-    pub fn new(msg: &str) -> Self {
-        Error::Generic(msg.to_string())
+    pub fn new(msg: impl Into<String>) -> Self {
+        Error::Generic(msg.into())
     }
 }
 
