@@ -39,7 +39,9 @@
         requiredTimeBeforeUnlock *= 2;
         error = "";
       }, requiredTimeBeforeUnlock);
-      error = `Too many failed attempts. Please try again after ${requiredTimeBeforeUnlock / 1000} seconds`;
+      error = describeError(
+        `Too many failed attempts. Please try again after ${requiredTimeBeforeUnlock / 1000} seconds`,
+      );
     }
 
     return () => {

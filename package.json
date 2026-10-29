@@ -17,7 +17,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@hermitk/bluenite": "^1.0.0",
+    "@hermitk/bluenite": "^1.1.0",
     "@tauri-apps/api": "^2",
     "lucide-svelte": "^1.0.1"
   },
