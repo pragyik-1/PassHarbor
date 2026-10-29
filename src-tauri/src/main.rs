@@ -6,7 +6,7 @@ use passharbor_lib::prelude::*;
 fn main() -> Result<()> {
     #[cfg(target_os = "linux")]
     {
-        // Fix weird rendering bugs in wayland.
+        // Wayland just doesn't boot unless i do this.
         unsafe {
             std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
         }
