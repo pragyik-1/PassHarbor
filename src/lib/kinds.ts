@@ -68,10 +68,6 @@ function saveCustomKinds(kinds: string[]): void {
   }
 }
 
-/**
- * Add a custom kind. Validates the name and checks for duplicates against
- * built-in and existing custom kinds, case-insensitively.
- */
 export function addCustomKind(
   rawKind: string,
 ): { success: boolean; error?: string } {

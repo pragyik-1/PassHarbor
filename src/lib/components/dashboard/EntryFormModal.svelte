@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Modal, Button, Input, Textarea, Select } from "@hermitk/bluenite";
   import type { SelectOption } from "@hermitk/bluenite";
-  import { EyeIcon, EyeOffIcon } from "lucide-svelte";
+  import { DicesIcon, EyeIcon, EyeOffIcon } from "lucide-svelte";
   import type { Entry, NewEntry, UpdateEntry } from "#lib/api.ts";
 
   type Mode = "create" | "edit";
@@ -11,7 +11,7 @@
     mode: Mode;
     /** Existing entry to prefill when mode === "edit". */
     entry?: Entry | null;
-    /** All available kinds (vault-derived + user-defined). */
+    /** All available kinds (vault-derived and user-defined). */
     availableKinds?: string[];
     busy?: boolean;
     error?: string;
@@ -36,6 +36,7 @@
   const MAX_NAME = 512;
 
   import { getAllKinds } from "#lib/kinds.ts";
+  import { generatePassword } from "#lib/generator.ts";
 
   let kind = $state("login");
 
@@ -220,24 +221,40 @@
       <div class="field">
         <div class="field-head">
           <label for="entry-password">Initial password</label>
-          <Button
-            type="button"
-            variant="ghost"
-            color="secondary"
-            size="sm"
-            class="reveal-btn"
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            aria-pressed={showPassword}
-            onclick={() => (showPassword = !showPassword)}
-          >
-            {#snippet icon()}
-              {#if showPassword}
-                <EyeOffIcon size={16} />
-              {:else}
-                <EyeIcon size={16} />
-              {/if}
-            {/snippet}
-          </Button>
+          <div>
+            <Button
+              type="button"
+              variant="ghost"
+              color="secondary"
+              size="sm"
+              onclick={() => {
+                password = generatePassword();
+              }}
+              title="Generate random password"
+            >
+              {#snippet icon()}
+                <DicesIcon size={16} />
+              {/snippet}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              color="secondary"
+              size="sm"
+              class="reveal-btn"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              onclick={() => (showPassword = !showPassword)}
+            >
+              {#snippet icon()}
+                {#if showPassword}
+                  <EyeOffIcon size={16} />
+                {:else}
+                  <EyeIcon size={16} />
+                {/if}
+              {/snippet}
+            </Button>
+          </div>
         </div>
         <Input
           id="entry-password"

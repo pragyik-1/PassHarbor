@@ -1,7 +1,8 @@
 <script lang="ts">
   import { Modal, Button, Input } from "@hermitk/bluenite";
-  import { EyeIcon, EyeOffIcon } from "lucide-svelte";
+  import { EyeIcon, EyeOffIcon, DicesIcon } from "lucide-svelte";
   import DialogActions from "./DialogActions.svelte";
+  import { generatePassword } from "#lib/generator.ts";
 
   interface Props {
     open: boolean;
@@ -34,6 +35,14 @@
       localError = "";
     }
   });
+
+  function handleGeneratePassword() {
+    const generated = generatePassword();
+    password = generated;
+    confirm = generated;
+    showPassword = true;
+    localError = "";
+  }
 
   function handleSubmit(e: SubmitEvent) {
     e.preventDefault();
@@ -74,24 +83,41 @@
     <div class="field">
       <div class="field-head">
         <label for="new-password">New password</label>
-        <Button
-          type="button"
-          variant="ghost"
-          color="secondary"
-          size="sm"
-          class="reveal-btn"
-          aria-label={showPassword ? "Hide password" : "Show password"}
-          aria-pressed={showPassword}
-          onclick={toggleVisibility}
-        >
-          {#snippet icon()}
-            {#if showPassword}
-              <EyeOffIcon size={16} />
-            {:else}
-              <EyeIcon size={16} />
-            {/if}
-          {/snippet}
-        </Button>
+        <div class="field-actions">
+          <Button
+            type="button"
+            variant="ghost"
+            color="secondary"
+            size="sm"
+            class="action-icon-btn"
+            aria-label="Generate random password"
+            title="Generate random password"
+            disabled={busy}
+            onclick={handleGeneratePassword}
+          >
+            {#snippet icon()}
+              <DicesIcon size={16} />
+            {/snippet}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            color="secondary"
+            size="sm"
+            class="action-icon-btn"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-pressed={showPassword}
+            onclick={toggleVisibility}
+          >
+            {#snippet icon()}
+              {#if showPassword}
+                <EyeOffIcon size={16} />
+              {:else}
+                <EyeIcon size={16} />
+              {/if}
+            {/snippet}
+          </Button>
+        </div>
       </div>
       <Input
         id="new-password"
@@ -164,12 +190,19 @@
     min-height: 1.5rem;
   }
 
+  .field-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
   label {
     font-size: 0.8125rem;
     font-weight: 500;
     color: var(--primary-text);
   }
 
+  :global(.action-icon-btn),
   :global(.reveal-btn) {
     width: 1.75rem !important;
     height: 1.75rem !important;

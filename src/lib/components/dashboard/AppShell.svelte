@@ -88,7 +88,7 @@
           {@const active = isKindActive(kind, kindFilter)}
           <button
             class="nav-item kind-item"
-            class:active={active}
+            class:active
             type="button"
             aria-label="{kind} — {count}"
             aria-pressed={active}
@@ -160,8 +160,6 @@
     overflow: hidden;
     background: var(--bg);
   }
-
-  /* ── Sidebar ──────────────────────────────────────────────── */
 
   .sidebar {
     display: flex;
@@ -387,8 +385,6 @@
     line-height: 1.4;
   }
 
-  /* ── Main area ────────────────────────────────────────────── */
-
   .main {
     display: flex;
     flex-direction: column;
@@ -397,8 +393,6 @@
     min-width: 0;
     outline: none;
   }
-
-  /* ── Responsive ───────────────────────────────────────────── */
 
   /* Icon rail at 760–1099px */
   @media (max-width: 1099px) and (min-width: 760px) {
