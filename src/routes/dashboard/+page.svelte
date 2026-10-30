@@ -23,16 +23,10 @@
   import PasswordModal from "#lib/components/dashboard/PasswordModal.svelte";
   import ConfirmDialog from "#lib/components/dashboard/ConfirmDialog.svelte";
 
-  // ── Session ────────────────────────────────────────────────
-
   let vaultName = $state<string | null>(null);
-
-  // ── Entries list ───────────────────────────────────────────
 
   let entries = $state<Entry[]>([]);
   let listLoading = $state(true);
-
-  // ── Kind filter (lifted so sidebar + list stay in sync) ────
 
   let kindFilter = $state<string | null>(null);
 
@@ -43,20 +37,14 @@
   // All available kinds: union of built-in + custom from localStorage + active entries
   const allKinds = $derived(getAllKinds(entries.map((e) => e.kind)));
 
-  // ── Selected entry ─────────────────────────────────────────
-
   let selectedId = $state<number | null>(null);
   let detail = $state<EntryDetail | null>(null);
   let detailLoading = $state(false);
   /** Monotonically increasing counter; guards against stale getEntry results. */
   let detailNonce = $state(0);
 
-  // ── Lock ───────────────────────────────────────────────────
-
   let lockBusy = $state(false);
   let lockError = $state("");
-
-  // ── Modals ─────────────────────────────────────────────────
 
   let formOpen = $state(false);
   let formMode = $state<"create" | "edit">("create");
@@ -70,13 +58,9 @@
   let confirmOpen = $state(false);
   let confirmBusy = $state(false);
 
-  // ── Selected entry object ──────────────────────────────────
-
   const selectedEntry = $derived(
     entries.find((e) => e.id === selectedId) ?? null,
   );
-
-  // ── Utilities ──────────────────────────────────────
 
   function handleVaultLocked() {
     forgetVault();
@@ -292,8 +276,6 @@
     }
   }
 
-  // ── Copy to clipboard ──────────────────────────────────────
-
   async function handleCopy(text: string, label: string) {
     try {
       await navigator.clipboard.writeText(text);
@@ -311,8 +293,6 @@
     }
   }
 
-  // ── Keyboard shortcuts ─────────────────────────────────────
-
   function handleGlobalKeydown(e: KeyboardEvent) {
     const target = e.target as HTMLElement;
     const inInput =
@@ -320,7 +300,7 @@
       target instanceof HTMLTextAreaElement ||
       target.isContentEditable;
 
-    // Escape → deselect entry (especially useful on small screens to return to list)
+    // Escape → deselect entry
     if (
       e.key === "Escape" &&
       selectedId !== null &&
@@ -350,15 +330,11 @@
     }
   }
 
-  // ── Confirm delete message ─────────────────────────────────
-
   const confirmMessage = $derived(
     selectedEntry
       ? `"${selectedEntry.name}" and all its password history will be permanently deleted. This cannot be undone.`
       : "",
   );
-
-  // ── Mount ──────────────────────────────────────────────────
 
   onMount(() => {
     const name = recallVault();
@@ -390,8 +366,6 @@
 </svelte:head>
 
 <svelte:document onkeydown={handleGlobalKeydown} />
-
-<ToastManager />
 
 {#if vaultName}
   <AppShell

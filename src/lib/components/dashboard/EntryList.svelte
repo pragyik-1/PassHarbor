@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from "@hermitk/bluenite";
+  import { Button, DropdownMenu, DropdownMenuItem } from "@hermitk/bluenite";
   import {
     SearchIcon,
     XIcon,
@@ -23,10 +23,21 @@
     onnew: () => void;
   }
 
-  let { entries, selectedId, loading, kindFilter, onfilterkind, onselect, onnew }: Props = $props();
+  let {
+    entries,
+    selectedId,
+    loading,
+    kindFilter,
+    onfilterkind,
+    onselect,
+    onnew,
+  }: Props = $props();
 
   let search = $state("");
   let sortKey = $state<SortKey>("name");
+
+  let sortOpen = $state(false);
+  let sortRef: HTMLButtonElement | null = $state(null);
 
   const kinds = $derived(countKinds(entries.map((entry) => entry.kind)));
 
@@ -83,9 +94,6 @@
     sortOptions.find((o) => o.key === sortKey)?.label ?? "Sort",
   );
 
-  let sortOpen = $state(false);
-  let sortAnchor = $state<HTMLElement | null>(null);
-
   function selectSort(key: SortKey) {
     sortKey = key;
     sortOpen = false;
@@ -103,7 +111,9 @@
   <!-- Search + sort bar -->
   <div class="toolbar">
     <div class="search-wrap">
-      <span class="search-icon" aria-hidden="true"><SearchIcon size={14} /></span>
+      <span class="search-icon" aria-hidden="true"
+        ><SearchIcon size={14} /></span
+      >
       <input
         id="entry-search"
         class="search-input"
@@ -127,50 +137,31 @@
       {/if}
     </div>
 
-    <div class="sort-wrap">
-      <button
-        bind:this={sortAnchor}
-        class="sort-btn"
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={sortOpen}
-        aria-label="Sort: {currentSortLabel}"
-        title="Change sort order"
-        onclick={() => (sortOpen = !sortOpen)}
-      >
-        <SortAscIcon size={14} aria-hidden="true" />
-      </button>
+    <Button
+      bind:ref={sortRef}
+      type="button"
+      variant="outline"
+      onclick={() => (sortOpen = !sortOpen)}
+    >
+      {#snippet icon()}
+        <SortAscIcon
+          size={14}
+          aria-hidden="true"
+          style="color: var(--primary)"
+        />
+      {/snippet}
+    </Button>
 
-      {#if sortOpen}
-        <div
-          class="sort-menu"
-          role="listbox"
-          aria-label="Sort options"
-          tabindex="-1"
+    <DropdownMenu anchor={sortRef} bind:open={sortOpen} placement="bottom">
+      {#each sortOptions as opt (opt.key)}
+        <DropdownMenuItem
+          onclick={() => selectSort(opt.key)}
+          onkeydown={(e) => handleSortKeydown(e, opt.key)}
         >
-          {#each sortOptions as opt (opt.key)}
-            <button
-              class="sort-option"
-              class:active={sortKey === opt.key}
-              role="option"
-              aria-selected={sortKey === opt.key}
-              type="button"
-              onclick={() => selectSort(opt.key)}
-              onkeydown={(e) => handleSortKeydown(e, opt.key)}
-            >
-              {opt.label}
-            </button>
-          {/each}
-        </div>
-
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          class="sort-backdrop"
-          onclick={() => (sortOpen = false)}
-        ></div>
-      {/if}
-    </div>
+          {opt.label}
+        </DropdownMenuItem>
+      {/each}
+    </DropdownMenu>
   </div>
 
   <!-- Kind filter chips -->
@@ -190,7 +181,7 @@
         {@const active = isKindActive(kind, kindFilter)}
         <button
           class="kind-chip"
-          class:active={active}
+          class:active
           type="button"
           onclick={() => onfilterkind(active ? null : kind)}
           aria-pressed={active}
@@ -346,77 +337,6 @@
     color: var(--text);
   }
 
-  /* ── Sort dropdown ────────────────────────────────────────── */
-
-  .sort-wrap {
-    position: relative;
-    flex-shrink: 0;
-  }
-
-  .sort-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    background: var(--input);
-    border: 1px solid var(--border);
-    border-radius: var(--round-md);
-    color: var(--secondary-text);
-    cursor: pointer;
-    padding: 0;
-    transition: border-color 120ms ease, color 120ms ease;
-  }
-
-  .sort-btn:hover,
-  .sort-btn[aria-expanded="true"] {
-    border-color: var(--primary);
-    color: var(--primary);
-  }
-
-  .sort-menu {
-    position: absolute;
-    top: calc(100% + 0.35rem);
-    right: 0;
-    z-index: 100;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--round-md);
-    padding: 0.25rem;
-    min-width: 11rem;
-    box-shadow: 0 4px 16px -4px color-mix(in srgb, var(--text) 15%, transparent);
-  }
-
-  .sort-option {
-    display: block;
-    width: 100%;
-    padding: 0.4rem 0.65rem;
-    background: none;
-    border: none;
-    border-radius: var(--round-sm);
-    text-align: left;
-    font-size: 0.8125rem;
-    color: var(--text);
-    cursor: pointer;
-    transition: background 100ms ease;
-  }
-
-  .sort-option:hover,
-  .sort-option.active {
-    background: var(--surface-hover);
-  }
-
-  .sort-option.active {
-    color: var(--primary);
-    font-weight: 600;
-  }
-
-  .sort-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 99;
-  }
-
   /* ── Kind chips ───────────────────────────────────────────── */
 
   .kind-chips {
@@ -439,7 +359,10 @@
     font-size: 0.75rem;
     color: var(--secondary-text);
     cursor: pointer;
-    transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+    transition:
+      border-color 120ms ease,
+      color 120ms ease,
+      background 120ms ease;
     white-space: nowrap;
   }
 
@@ -603,8 +526,13 @@
   }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.45; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

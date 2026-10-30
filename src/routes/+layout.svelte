@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { initTheme } from "@hermitk/bluenite";
+  import { initTheme, ToastManager } from "@hermitk/bluenite";
   import "@hermitk/bluenite/styles/theme.css";
   import "#lib/styles/global.css";
 
@@ -11,3 +11,5 @@
 </script>
 
 {@render children()}
+
+<ToastManager />
