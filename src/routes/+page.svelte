@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { Button, Card, Input, theme, toggleTheme } from "@hermitk/bluenite";
+  import { Button, Card, Input } from "@hermitk/bluenite";
   import { unlock } from "#lib/api.ts";
   import { rememberVault } from "#lib/session.ts";
   import {
@@ -9,10 +9,10 @@
     EyeOffIcon,
     KeyRoundIcon,
     LockIcon,
-    MoonIcon,
-    SunIcon,
     TriangleAlertIcon,
   } from "lucide-svelte";
+  import BrandMark from "#lib/components/BrandMark.svelte";
+  import ThemeToggle from "#lib/components/ThemeToggle.svelte";
 
   let passphrase = $state("");
   let error = $state("");
@@ -22,10 +22,6 @@
   let passphraseInput = $state<HTMLInputElement | null>(null);
   let unlockAttempts = $state(0);
   let requiredTimeBeforeUnlock = $state(30 * 1000);
-
-  const themeLabel = $derived(
-    theme.value === "dark" ? "Switch to light theme" : "Switch to dark theme",
-  );
 
   onMount(() => {
     passphraseInput?.focus();
@@ -98,41 +94,11 @@
 <div class="page">
   <header class="topbar">
     <a class="brand" href="/" aria-label="PassHarbor home">
-      <span class="brand-mark" aria-hidden="true">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M12 3l7 3v5c0 4.4-2.9 7.9-7 10-4.1-2.1-7-5.6-7-10V6l7-3z" />
-          <circle cx="12" cy="10.5" r="1.6" />
-          <path d="M12 12.1V15" />
-        </svg>
-      </span>
+      <BrandMark />
       <span class="brand-name">PassHarbor</span>
     </a>
 
-    <Button
-      type="button"
-      variant="ghost"
-      color="secondary"
-      size="sm"
-      class="theme-toggle"
-      aria-label={themeLabel}
-      title={themeLabel}
-      onclick={toggleTheme}
-    >
-      {#snippet icon()}
-        {#if theme.value === "dark"}
-          <SunIcon size={18} />
-        {:else}
-          <MoonIcon size={18} />
-        {/if}
-      {/snippet}
-    </Button>
+    <ThemeToggle />
   </header>
 
   <main class="main">
@@ -233,22 +199,6 @@
     gap: 0.65rem;
     color: var(--text);
     text-decoration: none;
-  }
-
-  .brand-mark {
-    display: grid;
-    place-items: center;
-    width: 2.15rem;
-    height: 2.15rem;
-    border-radius: 0.65rem;
-    color: #fff;
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    box-shadow: 0 8px 24px -10px color-mix(in srgb, var(--primary) 80%, transparent);
-  }
-
-  .brand-mark svg {
-    width: 1.25rem;
-    height: 1.25rem;
   }
 
   .brand-name {
