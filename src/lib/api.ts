@@ -85,3 +85,8 @@ export async function deleteEntry(id: number): Promise<boolean> {
 export async function setPassword(entryId: number, password: string): Promise<void> {
   await invoke<void>("set_password_cmd", { entryId, password });
 }
+
+/** Whether an IPC failure means the vault session has been closed. */
+export function isVaultLockedError(error: unknown): boolean {
+  return String(error).includes("Vault is locked");
+}
