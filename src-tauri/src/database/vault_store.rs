@@ -136,10 +136,17 @@ impl VaultStore {
     }
 
     /// Record the vault that was opened last.
+    /// Uses atomic write via a temporary file and rename to avoid torn state.
     pub fn set_last_opened(&self, id: &str) -> Result<()> {
         validate_id(id)?;
         create_private_dir(&self.root)?;
-        write_private_file(&self.root.join(LAST_OPENED_FILE), id.as_bytes())
+        let target = self.root.join(LAST_OPENED_FILE);
+        let tmp = self.root.join(format!("{LAST_OPENED_FILE}.tmp"));
+        write_private_file(&tmp, id.as_bytes())?;
+        fs::rename(&tmp, &target)
+            .map_err(|e| Error::Database(format!("Failed to finalize last_opened: {e}")))?;
+        sync_dir(&self.root)?;
+        Ok(())
     }
 
     fn read_manifest(&self, path: &Path) -> Result<VaultManifest> {

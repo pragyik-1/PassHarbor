@@ -67,8 +67,15 @@ fn open_vault(store: &VaultStore, passphrase: &SecretString) -> Result<(Database
         Database::open(&db_path, &db_key)?
     };
 
-    if is_new {
-        store.save(&manifest)?;
+    if is_new && let Err(err) = store.save(&manifest) {
+        drop(database);
+        if let Err(cleanup) = std::fs::remove_file(&db_path) {
+            eprintln!(
+                "open_vault: failed to remove database {} after manifest save failed: {cleanup}",
+                db_path.display()
+            );
+        }
+        return Err(err);
     }
 
     Ok((database, manifest))

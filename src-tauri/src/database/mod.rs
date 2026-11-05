@@ -25,6 +25,9 @@ pub struct Database {
 
 impl Database {
     /// Create a new encrypted database at `path`.
+    ///
+    /// If keying or schema migration fails, the pre-created file is removed
+    /// so an unusable empty file is not left at the vault path.
     pub fn create(path: &Path, key: &DbKey) -> Result<Self> {
         if path.exists() {
             return Err(Error::Database(format!(
@@ -38,7 +41,18 @@ impl Database {
         // SQLite creates the file itself, so it is pre-created here to get
         // owner-only permissions onto it.
         create_new_private_file(path)?;
-        Self::open_with_key(path, key)
+        match Self::open_with_key(path, key) {
+            Ok(db) => Ok(db),
+            Err(err) => {
+                if let Err(cleanup) = fs::remove_file(path) {
+                    eprintln!(
+                        "create: failed to remove unusable database {}: {cleanup}",
+                        path.display()
+                    );
+                }
+                Err(err)
+            }
+        }
     }
 
     /// Open an existing encrypted database.
@@ -477,10 +491,13 @@ fn row_to_password(row: &rusqlite::Row) -> rusqlite::Result<Password> {
 
 /// The current time in whole seconds since the Unix epoch.
 pub(crate) fn now_unix() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or_default()
+    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(d) => d.as_secs() as i64,
+        Err(e) => {
+            eprintln!("now_unix: system clock is before the Unix epoch, defaulting to 0: {e}");
+            0
+        }
+    }
 }
 
 // --- Shared file helpers -------------------------------------------------
@@ -536,11 +553,11 @@ pub(crate) fn write_private_file(path: &Path, bytes: &[u8]) -> Result<()> {
     let mut file = options
         .open(path)
         .map_err(|e| Error::Database(format!("Failed to open {}: {e}", path.display())))?;
-    restrict_permissions(path)?;
     file.write_all(bytes)
         .map_err(|e| Error::Database(format!("Failed to write {}: {e}", path.display())))?;
     file.sync_all()
         .map_err(|e| Error::Database(format!("Failed to flush {}: {e}", path.display())))?;
+    restrict_permissions(path)?;
     Ok(())
 }
 
