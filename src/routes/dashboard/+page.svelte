@@ -11,6 +11,7 @@
     deleteEntry,
     setPassword,
     lock,
+    getSession,
     listCustomKinds,
     isVaultLockedError,
   } from "#lib/api.ts";
@@ -22,7 +23,6 @@
     KindCount,
   } from "#lib/api.ts";
   import { DEFAULT_KINDS, mergeKinds } from "#lib/kinds.ts";
-  import { recallVault, forgetVault } from "#lib/session.ts";
   import type { SortKey } from "#lib/components/dashboard/EntryList.svelte";
 
   import AppShell from "#lib/components/dashboard/AppShell.svelte";
@@ -84,7 +84,6 @@
   );
 
   function handleVaultLocked() {
-    forgetVault();
     toast.show({
       message: "Vault locked",
       description: "Your session has ended. Please unlock again.",
@@ -190,7 +189,6 @@
     lockError = "";
     try {
       await lock();
-      forgetVault();
       await goto("/", { replace: true });
     } catch (err) {
       lockError = String(err);
@@ -384,28 +382,25 @@
       : "",
   );
 
-  onMount(() => {
-    const name = recallVault();
-    if (!name) {
-      void goto("/", { replace: true });
-      return;
-    }
-    vaultName = name;
-
-    void (async () => {
-      listLoading = true;
-      try {
-        await Promise.all([refreshList(), loadCustomKinds()]);
-      } catch (err) {
-        if (isVaultLockedError(err)) {
-          handleVaultLocked();
-          return;
-        }
-        toast.show({ message: "Failed to load entries", variant: "danger" });
-      } finally {
-        listLoading = false;
+  onMount(async () => {
+    try {
+      const session = await getSession();
+      if (!session.unlocked) {
+        void goto("/", { replace: true });
+        return;
       }
-    })();
+      vaultName = session.vault_name ?? "Main";
+      listLoading = true;
+      await Promise.all([refreshList(), loadCustomKinds()]);
+    } catch (err) {
+      if (isVaultLockedError(err)) {
+        handleVaultLocked();
+        return;
+      }
+      void goto("/", { replace: true });
+    } finally {
+      listLoading = false;
+    }
   });
 </script>
 

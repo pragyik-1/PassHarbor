@@ -2,8 +2,7 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { Button, Card, Input } from "@hermitk/bluenite";
-  import { unlock } from "#lib/api.ts";
-  import { rememberVault } from "#lib/session.ts";
+  import { unlock, getSession, isInvalidMasterKeyError } from "#lib/api.ts";
   import {
     EyeIcon,
     EyeOffIcon,
@@ -20,12 +19,9 @@
   let showPassphrase = $state(false);
   let capsLock = $state(false);
   let passphraseInput = $state<HTMLInputElement | null>(null);
+
   let unlockAttempts = $state(0);
   let requiredTimeBeforeUnlock = $state(30 * 1000);
-
-  onMount(() => {
-    passphraseInput?.focus();
-  });
 
   $effect(() => {
     let timeout: number;
@@ -45,11 +41,23 @@
     };
   });
 
+  onMount(async () => {
+    try {
+      const session = await getSession();
+      if (session.unlocked) {
+        await goto("/dashboard", { replace: true });
+        return;
+      }
+    } catch {
+      // Ignored: vault is locked
+    }
+    passphraseInput?.focus();
+  });
+
   function describeError(cause: unknown): string {
-    const message = String(cause);
-    return message === "Invalid master key"
+    return isInvalidMasterKeyError(cause)
       ? "Incorrect passphrase. Please try again."
-      : message;
+      : String(cause);
   }
 
   function checkCapsLock(event: KeyboardEvent) {
@@ -73,11 +81,11 @@
     error = "";
     busy = true;
     try {
-      const vaultName = await unlock(passphrase);
+      await unlock(passphrase);
       passphrase = "";
-      rememberVault(vaultName);
       await goto("/dashboard", { replace: true });
     } catch (cause) {
+      unlockAttempts++;
       error = describeError(cause);
       passphraseInput?.focus();
       unlockAttempts++;

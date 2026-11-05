@@ -4,13 +4,13 @@ use crate::database::{
 };
 use crate::master_key::{MIN_PASSPHRASE_LEN, MasterKey};
 use crate::prelude::*;
-use crate::state::AppState;
+use crate::state::{ActiveSession, AppState, SessionInfo};
 use secrecy::{ExposeSecret, SecretString};
 
 /// Name given to the vault that is created on first run.
 const DEFAULT_VAULT_NAME: &str = "Main";
 
-/// Open the vault and return its name.
+/// Open the vault and return session information.
 ///
 /// The vault to open is the one that was opened last; failing that, the
 /// oldest known vault; failing that, a new vault is created with the
@@ -19,7 +19,7 @@ const DEFAULT_VAULT_NAME: &str = "Main";
 /// A rejected passphrase leaves the vault locked: the previous session is
 /// closed before the passphrase is checked.
 #[tauri::command(async)]
-pub fn unlock_cmd(app: tauri::AppHandle, passphrase: SecretString) -> IPCResult<String> {
+pub fn unlock_cmd(app: tauri::AppHandle, passphrase: SecretString) -> IPCResult<SessionInfo> {
     let app_state = AppState::resolve(&app);
 
     {
@@ -31,10 +31,17 @@ pub fn unlock_cmd(app: tauri::AppHandle, passphrase: SecretString) -> IPCResult<
     let (database, manifest) = open_vault(store, &passphrase)?;
     store.set_last_opened(&manifest.id)?;
 
-    let name = manifest.name;
+    let info = SessionInfo {
+        unlocked: true,
+        vault_name: Some(manifest.name.clone()),
+    };
+
     let mut session = app_state.session();
-    *session = Some(database);
-    Ok(name)
+    *session = Some(ActiveSession {
+        db: database,
+        manifest,
+    });
+    Ok(info)
 }
 
 fn open_vault(store: &VaultStore, passphrase: &SecretString) -> Result<(Database, VaultManifest)> {
@@ -67,7 +74,15 @@ fn open_vault(store: &VaultStore, passphrase: &SecretString) -> Result<(Database
     Ok((database, manifest))
 }
 
+/// Report the current session state (locked/unlocked and vault metadata).
+#[tauri::command(async)]
+pub fn get_session_cmd(app: tauri::AppHandle) -> IPCResult<SessionInfo> {
+    let app_state = AppState::resolve(&app);
+    Ok(app_state.session_info())
+}
+
 /// Lock the vault: close the database and release the key material.
+/// Idempotent: succeeds even if already locked.
 #[tauri::command(async)]
 pub fn lock_cmd(app: tauri::AppHandle) -> IPCResult<()> {
     let app_state = AppState::resolve(&app);
@@ -80,48 +95,48 @@ pub fn lock_cmd(app: tauri::AppHandle) -> IPCResult<()> {
 pub fn add_entry_cmd(app: tauri::AppHandle, entry: NewEntry) -> IPCResult<i64> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
-    let db = session.as_ref().ok_or(Error::VaultLocked)?;
-    Ok(db.add_entry(entry)?)
+    let active = session.as_ref().ok_or(Error::VaultLocked)?;
+    Ok(active.db.add_entry(entry)?)
 }
 
 #[tauri::command(async)]
 pub fn list_entries_cmd(app: tauri::AppHandle) -> IPCResult<Vec<Entry>> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
-    let db = session.as_ref().ok_or(Error::VaultLocked)?;
-    Ok(db.list_entries()?)
+    let active = session.as_ref().ok_or(Error::VaultLocked)?;
+    Ok(active.db.list_entries()?)
 }
 
 #[tauri::command(async)]
 pub fn query_entries_cmd(app: tauri::AppHandle, query: EntryQuery) -> IPCResult<EntryQueryResult> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
-    let db = session.as_ref().ok_or(Error::VaultLocked)?;
-    Ok(db.query_entries(query)?)
+    let active = session.as_ref().ok_or(Error::VaultLocked)?;
+    Ok(active.db.query_entries(query)?)
 }
 
 #[tauri::command(async)]
 pub fn get_entry_cmd(app: tauri::AppHandle, id: i64) -> IPCResult<Option<EntryDetail>> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
-    let db = session.as_ref().ok_or(Error::VaultLocked)?;
-    Ok(db.get_entry(id)?)
+    let active = session.as_ref().ok_or(Error::VaultLocked)?;
+    Ok(active.db.get_entry(id)?)
 }
 
 #[tauri::command(async)]
 pub fn update_entry_cmd(app: tauri::AppHandle, id: i64, entry: UpdateEntry) -> IPCResult<bool> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
-    let db = session.as_ref().ok_or(Error::VaultLocked)?;
-    Ok(db.update_entry(id, entry)?)
+    let active = session.as_ref().ok_or(Error::VaultLocked)?;
+    Ok(active.db.update_entry(id, entry)?)
 }
 
 #[tauri::command(async)]
 pub fn delete_entry_cmd(app: tauri::AppHandle, id: i64) -> IPCResult<bool> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
-    let db = session.as_ref().ok_or(Error::VaultLocked)?;
-    Ok(db.delete_entry(id)?)
+    let active = session.as_ref().ok_or(Error::VaultLocked)?;
+    Ok(active.db.delete_entry(id)?)
 }
 
 #[tauri::command(async)]
@@ -132,8 +147,8 @@ pub fn set_password_cmd(
 ) -> IPCResult<()> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
-    let db = session.as_ref().ok_or(Error::VaultLocked)?;
-    db.set_password(entry_id, &password)?;
+    let active = session.as_ref().ok_or(Error::VaultLocked)?;
+    active.db.set_password(entry_id, &password)?;
     Ok(())
 }
 
@@ -141,8 +156,8 @@ pub fn set_password_cmd(
 pub fn add_custom_kind_cmd(app: tauri::AppHandle, kind: String) -> IPCResult<()> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
-    let db = session.as_ref().ok_or(Error::VaultLocked)?;
-    db.add_custom_kind(&kind)?;
+    let active = session.as_ref().ok_or(Error::VaultLocked)?;
+    active.db.add_custom_kind(&kind)?;
     Ok(())
 }
 
@@ -150,8 +165,8 @@ pub fn add_custom_kind_cmd(app: tauri::AppHandle, kind: String) -> IPCResult<()>
 pub fn remove_custom_kind_cmd(app: tauri::AppHandle, kind: String) -> IPCResult<()> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
-    let db = session.as_ref().ok_or(Error::VaultLocked)?;
-    db.remove_custom_kind(&kind)?;
+    let active = session.as_ref().ok_or(Error::VaultLocked)?;
+    active.db.remove_custom_kind(&kind)?;
     Ok(())
 }
 
@@ -159,8 +174,8 @@ pub fn remove_custom_kind_cmd(app: tauri::AppHandle, kind: String) -> IPCResult<
 pub fn list_custom_kinds_cmd(app: tauri::AppHandle) -> IPCResult<Vec<String>> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
-    let db = session.as_ref().ok_or(Error::VaultLocked)?;
-    Ok(db.list_custom_kinds()?)
+    let active = session.as_ref().ok_or(Error::VaultLocked)?;
+    Ok(active.db.list_custom_kinds()?)
 }
 
 #[cfg(test)]

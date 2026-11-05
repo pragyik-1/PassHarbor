@@ -8,6 +8,11 @@ import { invoke } from "@tauri-apps/api/core";
  * *payloads* keep their Rust field names.
  */
 
+export interface SessionInfo {
+  unlocked: boolean;
+  vault_name: string | null;
+}
+
 export interface Entry {
   id: number;
   kind: string;
@@ -79,9 +84,14 @@ export interface UpdateEntry {
   note?: string | null;
 }
 
-/** Open the vault and return its name. */
-export async function unlock(passphrase: string): Promise<string> {
-  return await invoke<string>("unlock_cmd", { passphrase });
+/** Open the vault and return session information. */
+export async function unlock(passphrase: string): Promise<SessionInfo> {
+  return await invoke<SessionInfo>("unlock_cmd", { passphrase });
+}
+
+/** Check the current session status without modifying state. */
+export async function getSession(): Promise<SessionInfo> {
+  return await invoke<SessionInfo>("get_session_cmd");
 }
 
 /** Lock the vault: close the database and release the key material. */
@@ -134,4 +144,9 @@ export async function listCustomKinds(): Promise<string[]> {
 /** Whether an IPC failure means the vault session has been closed. */
 export function isVaultLockedError(error: unknown): boolean {
   return String(error).includes("Vault is locked");
+}
+
+/** Whether an IPC failure indicates an invalid master passphrase. */
+export function isInvalidMasterKeyError(error: unknown): boolean {
+  return String(error).includes("Invalid master key");
 }

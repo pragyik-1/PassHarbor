@@ -18,6 +18,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             frontend_api::unlock_cmd,
             frontend_api::lock_cmd,
+            frontend_api::get_session_cmd,
             frontend_api::add_entry_cmd,
             frontend_api::list_entries_cmd,
             frontend_api::query_entries_cmd,

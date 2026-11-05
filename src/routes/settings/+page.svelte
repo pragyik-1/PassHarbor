@@ -22,9 +22,9 @@
         RefreshCwIcon,
     } from "lucide-svelte";
     import { DEFAULT_KINDS, isDefaultKind, kindKey } from "#lib/kinds.ts";
-    import { recallVault, forgetVault } from "#lib/session.ts";
     import {
         lock,
+        getSession,
         queryEntries,
         listCustomKinds,
         addCustomKind,
@@ -46,13 +46,13 @@
     );
 
     onMount(async () => {
-        const name = recallVault();
-        if (!name) {
-            void goto("/");
-            return;
-        }
-        vaultName = name;
         try {
+            const session = await getSession();
+            if (!session.unlocked) {
+                void goto("/", { replace: true });
+                return;
+            }
+            vaultName = session.vault_name;
             const [kinds, res] = await Promise.all([
                 listCustomKinds(),
                 queryEntries({}),
@@ -61,7 +61,6 @@
             kindCounts = res.kinds;
         } catch (err) {
             if (isVaultLockedError(err)) {
-                forgetVault();
                 void goto("/", { replace: true });
                 return;
             }
@@ -165,7 +164,6 @@
         lockBusy = true;
         try {
             await lock();
-            forgetVault();
             await goto("/");
         } catch (err) {
             toast.show({
