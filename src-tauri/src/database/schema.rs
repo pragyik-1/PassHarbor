@@ -8,6 +8,8 @@ use crate::prelude::*;
 pub const MAX_KIND_LEN: usize = 64;
 /// Maximum length of an entry's name.
 pub const MAX_NAME_LEN: usize = 512;
+/// Maximum number of historical password versions retained per entry.
+pub const MAX_PASSWORD_HISTORY: usize = 20;
 
 /// Migrations in order; the index + 1 is the schema version each one produces
 /// (tracked in `PRAGMA user_version`).
@@ -105,14 +107,14 @@ pub struct Password {
     pub created_at: i64,
 }
 
-/// An entry together with its password history, oldest version first.
+/// An entry together with its current password and previous versions (oldest first).
 #[derive(Debug, Serialize)]
 pub struct EntryDetail {
     pub entry: Entry,
     /// The most recently stored password, if any.
     #[serde(serialize_with = "serialize_optional_secret")]
     pub current_password: Option<SecretString>,
-    /// Every stored password version, oldest first.
+    /// Previous stored password versions (excludes the current password).
     pub history: Vec<Password>,
 }
 

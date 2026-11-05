@@ -121,7 +121,7 @@ impl Database {
         .map_err(|e| Error::Database(format!("Failed to insert entry: {e}")))?;
         let id = tx.last_insert_rowid();
         if let Some(password) = new.password {
-            Self::insert_password(&tx, id, &password)?;
+            Self::insert_password_tx(&tx, id, &password)?;
         }
         tx.commit()
             .map_err(|e| Error::Database(format!("Failed to commit transaction: {e}")))?;
@@ -243,16 +243,24 @@ impl Database {
             .conn
             .prepare(
                 "SELECT id, entry_id, password, created_at
-                 FROM passwords WHERE entry_id = ?1 ORDER BY id",
+                 FROM passwords WHERE entry_id = ?1 ORDER BY id DESC",
             )
             .map_err(|e| Error::Database(format!("Failed to prepare history query: {e}")))?;
-        let history = stmt
+        let mut all_passwords = stmt
             .query_map(params![id], row_to_password)
             .map_err(|e| Error::Database(format!("Failed to load password history: {e}")))?
             .collect::<std::result::Result<Vec<Password>, _>>()
             .map_err(|e| Error::Database(format!("Failed to read password row: {e}")))?;
 
-        let current_password = history.last().map(|p| p.password.clone());
+        let current_password = if !all_passwords.is_empty() {
+            Some(all_passwords.remove(0).password)
+        } else {
+            None
+        };
+        // Oldest-first for previous password history
+        all_passwords.reverse();
+        let history = all_passwords;
+
         Ok(Some(EntryDetail {
             entry,
             current_password,
@@ -296,10 +304,15 @@ impl Database {
     }
 
     /// Store a new password version for an entry, keeping older versions as
-    /// history.
+    /// history (up to MAX_PASSWORD_HISTORY). Consecutive identical passwords
+    /// are not appended as duplicates. Bumps entries.updated_at.
     pub fn set_password(&self, entry_id: i64, password: &SecretString) -> Result<()> {
-        let exists: bool = self
+        let tx = self
             .conn
+            .unchecked_transaction()
+            .map_err(|e| Error::Database(format!("Failed to start transaction: {e}")))?;
+
+        let exists: bool = tx
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM entries WHERE id = ?1)",
                 params![entry_id],
@@ -309,10 +322,43 @@ impl Database {
         if !exists {
             return Err(Error::EntryNotFound(entry_id));
         }
-        Self::insert_password(&self.conn, entry_id, password)
+
+        let latest_password: Option<String> = tx
+            .query_row(
+                "SELECT password FROM passwords WHERE entry_id = ?1 ORDER BY id DESC LIMIT 1",
+                params![entry_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| Error::Database(format!("Failed to check current password: {e}")))?;
+
+        if latest_password.as_deref() != Some(password.expose_secret()) {
+            Self::insert_password_tx(&tx, entry_id, password)?;
+            // Keep at most MAX_PASSWORD_HISTORY older versions plus 1 current version
+            let max_retained = (schema::MAX_PASSWORD_HISTORY + 1) as i64;
+            tx.execute(
+                "DELETE FROM passwords
+                 WHERE entry_id = ?1
+                   AND id NOT IN (
+                       SELECT id FROM passwords WHERE entry_id = ?1 ORDER BY id DESC LIMIT ?2
+                   )",
+                params![entry_id, max_retained],
+            )
+            .map_err(|e| Error::Database(format!("Failed to prune password history: {e}")))?;
+        }
+
+        tx.execute(
+            "UPDATE entries SET updated_at = unixepoch() WHERE id = ?1",
+            params![entry_id],
+        )
+        .map_err(|e| Error::Database(format!("Failed to bump updated_at: {e}")))?;
+
+        tx.commit()
+            .map_err(|e| Error::Database(format!("Failed to commit transaction: {e}")))?;
+        Ok(())
     }
 
-    fn insert_password(conn: &Connection, entry_id: i64, password: &SecretString) -> Result<()> {
+    fn insert_password_tx(conn: &Connection, entry_id: i64, password: &SecretString) -> Result<()> {
         conn.execute(
             "INSERT INTO passwords (entry_id, password) VALUES (?1, ?2)",
             params![entry_id, password.expose_secret()],
@@ -659,7 +705,7 @@ mod tests {
             detail.current_password.as_ref().map(|p| p.expose_secret()),
             Some("hunter2")
         );
-        assert_eq!(detail.history.len(), 1);
+        assert_eq!(detail.history.len(), 0);
     }
 
     #[test]
@@ -759,7 +805,36 @@ mod tests {
             .iter()
             .map(|p| p.password.expose_secret())
             .collect();
-        assert_eq!(stored, ["old", "new"]);
+        assert_eq!(stored, ["old"]);
+
+        // Setting the exact same password again does not duplicate history
+        db.set_password(id, &SecretString::from("new"))
+            .expect("same password");
+        let detail = db.get_entry(id).expect("get entry").expect("entry exists");
+        assert_eq!(detail.history.len(), 1);
+    }
+
+    #[test]
+    fn set_password_caps_history_at_limit() {
+        let dir = TempDir::new();
+        let path = dir.path().join("vault.db");
+        let db = Database::create(&path, &key_a()).expect("create database");
+
+        let id = db.add_entry(new_entry("example.com")).expect("add entry");
+        for i in 0..25 {
+            db.set_password(id, &SecretString::from(format!("pw-{i}")))
+                .expect("set password");
+        }
+
+        let detail = db.get_entry(id).expect("get entry").expect("entry exists");
+        assert_eq!(
+            detail.current_password.as_ref().map(|p| p.expose_secret()),
+            Some("pw-24")
+        );
+        // Capped at MAX_PASSWORD_HISTORY (20)
+        assert_eq!(detail.history.len(), schema::MAX_PASSWORD_HISTORY);
+        assert_eq!(detail.history[0].password.expose_secret(), "pw-4");
+        assert_eq!(detail.history[19].password.expose_secret(), "pw-23");
     }
 
     #[test]

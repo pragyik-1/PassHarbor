@@ -43,7 +43,7 @@
   let revealedHistory = $state<Set<number>>(new Set());
   let copiedLabel = $state<string | null>(null);
   let copiedTimer: ReturnType<typeof setTimeout> | null = null;
-  let previousDetail: EntryDetail | null = null;
+  let previousEntryId: number | null = null;
 
   function resetSecrets() {
     revealedCurrent = false;
@@ -55,9 +55,12 @@
     }
   }
 
+  // Reset revealed secrets only when the selected entry changes, not on every
+  // data refresh of the same entry (e.g. after a password update).
   $effect(() => {
-    if (entry === null || detail !== previousDetail) {
-      previousDetail = detail;
+    const currentId = entry?.id ?? null;
+    if (currentId !== previousEntryId) {
+      previousEntryId = currentId;
       resetSecrets();
     }
   });
@@ -253,14 +256,10 @@
         </div>
 
         <ol class="history-list" reversed>
-          {#each sortedHistory as pw, i (pw.id)}
-            {@const isCurrent = i === 0}
+          {#each sortedHistory as pw (pw.id)}
             <li class="history-item">
               <div class="history-meta">
                 <span class="history-date">{formatDateTime(pw.created_at)}</span>
-                {#if isCurrent}
-                  <span class="current-badge">Current</span>
-                {/if}
               </div>
               <div class="history-pw-row">
                 <SecretField
@@ -552,19 +551,6 @@
     font-size: 0.75rem;
     color: var(--secondary-text);
     font-variant-numeric: tabular-nums;
-  }
-
-  .current-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.1rem 0.4rem;
-    border-radius: 999px;
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    background: color-mix(in srgb, var(--success) 15%, transparent);
-    color: var(--success);
   }
 
   .history-pw-row {

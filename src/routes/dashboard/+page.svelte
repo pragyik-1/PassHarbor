@@ -311,9 +311,8 @@
       await setPassword(selectedId, password);
       pwOpen = false;
       toast.show({ message: "Password updated", variant: "success" });
-      // Refresh the detail to show new password and updated history
       void loadDetail(selectedId);
-      // Note: setPassword does NOT change entry.updated_at — do not refresh list
+      await refreshList();
     } catch (err) {
       if (isVaultLockedError(err)) {
         handleVaultLocked();
