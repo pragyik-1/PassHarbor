@@ -102,6 +102,8 @@ impl Database {
     /// Returns the new entry's id.
     pub fn add_entry(&self, new: NewEntry) -> Result<i64> {
         new.validate()?;
+        let kind = new.kind.trim();
+        let name = new.name.trim();
         let tx = self
             .conn
             .unchecked_transaction()
@@ -109,14 +111,7 @@ impl Database {
         tx.execute(
             "INSERT INTO entries (kind, name, username, email, url, note)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                new.kind,
-                new.name,
-                new.username,
-                new.email,
-                new.url,
-                new.note
-            ],
+            params![kind, name, new.username, new.email, new.url, new.note],
         )
         .map_err(|e| Error::Database(format!("Failed to insert entry: {e}")))?;
         let id = tx.last_insert_rowid();
@@ -272,6 +267,8 @@ impl Database {
     /// touched here. Returns `false` if the id is unknown.
     pub fn update_entry(&self, id: i64, update: UpdateEntry) -> Result<bool> {
         update.validate()?;
+        let kind = update.kind.trim();
+        let name = update.name.trim();
         let changed = self
             .conn
             .execute(
@@ -280,8 +277,8 @@ impl Database {
                      updated_at = unixepoch()
                  WHERE id = ?7",
                 params![
-                    update.kind,
-                    update.name,
+                    kind,
+                    name,
                     update.username,
                     update.email,
                     update.url,
@@ -307,6 +304,7 @@ impl Database {
     /// history (up to MAX_PASSWORD_HISTORY). Consecutive identical passwords
     /// are not appended as duplicates. Bumps entries.updated_at.
     pub fn set_password(&self, entry_id: i64, password: &SecretString) -> Result<()> {
+        schema::validate_password(password.expose_secret())?;
         let tx = self
             .conn
             .unchecked_transaction()

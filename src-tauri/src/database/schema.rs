@@ -8,6 +8,16 @@ use crate::prelude::*;
 pub const MAX_KIND_LEN: usize = 64;
 /// Maximum length of an entry's name.
 pub const MAX_NAME_LEN: usize = 512;
+/// Maximum length of an entry's username.
+pub const MAX_USERNAME_LEN: usize = 512;
+/// Maximum length of an entry's email.
+pub const MAX_EMAIL_LEN: usize = 512;
+/// Maximum length of an entry's url.
+pub const MAX_URL_LEN: usize = 2048;
+/// Maximum length of an entry's note.
+pub const MAX_NOTE_LEN: usize = 65536;
+/// Maximum length of a password.
+pub const MAX_PASSWORD_LEN: usize = 4096;
 /// Maximum number of historical password versions retained per entry.
 pub const MAX_PASSWORD_HISTORY: usize = 20;
 
@@ -135,7 +145,18 @@ pub struct NewEntry {
 impl NewEntry {
     /// Check the fields that the database stores as-is.
     pub fn validate(&self) -> Result<()> {
-        validate_entry(&self.kind, &self.name)
+        validate_entry(
+            &self.kind,
+            &self.name,
+            &self.username,
+            &self.email,
+            &self.url,
+            &self.note,
+        )?;
+        if let Some(ref pw) = self.password {
+            validate_password(pw.expose_secret())?;
+        }
+        Ok(())
     }
 }
 
@@ -154,7 +175,14 @@ pub struct UpdateEntry {
 impl UpdateEntry {
     /// Check the fields that the database stores as-is.
     pub fn validate(&self) -> Result<()> {
-        validate_entry(&self.kind, &self.name)
+        validate_entry(
+            &self.kind,
+            &self.name,
+            &self.username,
+            &self.email,
+            &self.url,
+            &self.note,
+        )
     }
 }
 
@@ -181,12 +209,19 @@ fn serialize_optional_secret<S: serde::Serializer>(
     }
 }
 
-/// Reject entries that would be stored empty or with an unbounded kind.
-fn validate_entry(kind: &str, name: &str) -> Result<()> {
+/// Validate field lengths and required non-empty constraints.
+fn validate_entry(
+    kind: &str,
+    name: &str,
+    username: &Option<String>,
+    email: &Option<String>,
+    url: &Option<String>,
+    note: &Option<String>,
+) -> Result<()> {
     if kind.trim().is_empty() {
         return Err(Error::InvalidEntry("kind must not be empty".to_string()));
     }
-    if kind.chars().count() > MAX_KIND_LEN {
+    if kind.trim().chars().count() > MAX_KIND_LEN {
         return Err(Error::InvalidEntry(format!(
             "kind must be at most {MAX_KIND_LEN} characters"
         )));
@@ -194,9 +229,39 @@ fn validate_entry(kind: &str, name: &str) -> Result<()> {
     if name.trim().is_empty() {
         return Err(Error::InvalidEntry("name must not be empty".to_string()));
     }
-    if name.chars().count() > MAX_NAME_LEN {
+    if name.trim().chars().count() > MAX_NAME_LEN {
         return Err(Error::InvalidEntry(format!(
             "name must be at most {MAX_NAME_LEN} characters"
+        )));
+    }
+    validate_optional_len(username, "username", MAX_USERNAME_LEN)?;
+    validate_optional_len(email, "email", MAX_EMAIL_LEN)?;
+    validate_optional_len(url, "url", MAX_URL_LEN)?;
+    validate_optional_len(note, "note", MAX_NOTE_LEN)?;
+    Ok(())
+}
+
+fn validate_optional_len(val: &Option<String>, field_name: &str, max_len: usize) -> Result<()> {
+    if let Some(text) = val
+        && text.chars().count() > max_len
+    {
+        return Err(Error::InvalidEntry(format!(
+            "{field_name} must be at most {max_len} characters"
+        )));
+    }
+    Ok(())
+}
+
+/// Validate password constraints.
+pub fn validate_password(password: &str) -> Result<()> {
+    if password.is_empty() {
+        return Err(Error::InvalidEntry(
+            "password must not be empty".to_string(),
+        ));
+    }
+    if password.chars().count() > MAX_PASSWORD_LEN {
+        return Err(Error::InvalidEntry(format!(
+            "password must be at most {MAX_PASSWORD_LEN} characters"
         )));
     }
     Ok(())
@@ -305,5 +370,51 @@ mod tests {
             entry.password.as_ref().map(|p| p.expose_secret()),
             Some("hunter2")
         );
+    }
+
+    fn new_entry() -> NewEntry {
+        NewEntry {
+            kind: "login".to_string(),
+            name: "example.com".to_string(),
+            username: None,
+            email: None,
+            url: None,
+            note: None,
+            password: None,
+        }
+    }
+
+    #[test]
+    fn entry_fields_over_their_limit_are_rejected() {
+        let mut entry = new_entry();
+        entry.note = Some("x".repeat(MAX_NOTE_LEN + 1));
+        assert!(matches!(
+            entry.validate(),
+            Err(Error::InvalidEntry(message)) if message.contains("note")
+        ));
+
+        let mut entry = new_entry();
+        entry.username = Some("x".repeat(MAX_USERNAME_LEN + 1));
+        assert!(matches!(
+            entry.validate(),
+            Err(Error::InvalidEntry(message)) if message.contains("username")
+        ));
+    }
+
+    #[test]
+    fn empty_or_overlong_passwords_are_rejected() {
+        let mut entry = new_entry();
+        entry.password = Some(SecretString::from(""));
+        assert!(matches!(
+            entry.validate(),
+            Err(Error::InvalidEntry(message)) if message.contains("password")
+        ));
+
+        let mut entry = new_entry();
+        entry.password = Some(SecretString::from("x".repeat(MAX_PASSWORD_LEN + 1)));
+        assert!(matches!(
+            entry.validate(),
+            Err(Error::InvalidEntry(message)) if message.contains("password")
+        ));
     }
 }
