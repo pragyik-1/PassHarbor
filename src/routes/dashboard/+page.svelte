@@ -31,6 +31,7 @@
   import EntryFormModal from "#lib/components/dashboard/EntryFormModal.svelte";
   import PasswordModal from "#lib/components/dashboard/PasswordModal.svelte";
   import ConfirmDialog from "#lib/components/dashboard/ConfirmDialog.svelte";
+  import GeneratePasswordModal from "#lib/components/GeneratePasswordModal.svelte";
 
   let vaultName = $state<string | null>(null);
 
@@ -77,6 +78,8 @@
 
   let confirmOpen = $state(false);
   let confirmBusy = $state(false);
+
+  let generatorOpen = $state(false);
 
   const selectedEntry = $derived(
     entries.find((e) => e.id === selectedId) ??
@@ -421,6 +424,7 @@
     {lockError}
     onlock={lockVault}
     onnew={openCreate}
+    ongenerator={() => (generatorOpen = true)}
   >
     <div class="workspace">
       <!-- Entry list -->
@@ -508,6 +512,8 @@
       confirmOpen = false;
     }}
   />
+
+  <GeneratePasswordModal bind:open={generatorOpen} />
 {/if}
 
 <style>

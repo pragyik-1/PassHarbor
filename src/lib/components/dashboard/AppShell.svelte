@@ -8,6 +8,7 @@
     ListIcon,
     TagIcon,
     SettingsIcon,
+    DicesIcon,
   } from "lucide-svelte";
   import type { KindCount } from "#lib/api.ts";
   import { isKindActive } from "#lib/kinds.ts";
@@ -24,6 +25,7 @@
     lockError: string;
     onlock: () => void;
     onnew: () => void;
+    ongenerator?: () => void;
     children: Snippet;
   }
 
@@ -37,6 +39,7 @@
     lockError,
     onlock,
     onnew,
+    ongenerator,
     children,
   }: Props = $props();
 </script>
@@ -100,6 +103,16 @@
           </button>
         {/each}
       {/if}
+
+      <div class="nav-section-label">Tools</div>
+      <button
+        type="button"
+        class="nav-item"
+        onclick={ongenerator}
+      >
+        <DicesIcon size={14} aria-hidden="true" />
+        <span class="nav-label">Password generator</span>
+      </button>
     </nav>
 
     <!-- Footer -->

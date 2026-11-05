@@ -102,16 +102,15 @@ function filterCharset(
   return result;
 }
 
-/**
- * Generate a cryptographically secure random password based on the given configuration.
- */
-export function generatePassword(
-  options: PasswordGeneratorOptions = {},
-): string {
+export function buildPool(options: PasswordGeneratorOptions = {}): {
+  lower: string;
+  upper: string;
+  nums: string;
+  syms: string;
+  custom: string;
+  fullPool: string;
+} {
   const opts = { ...DEFAULT_GENERATOR_OPTIONS, ...options };
-  const targetLength = Math.max(1, opts.length);
-
-  // Filter individual charsets according to exclusions
   const lower = opts.lowercase
     ? filterCharset(LOWERCASE_CHARS, opts.excludeSimilar, opts.excludeAmbiguous)
     : "";
@@ -132,8 +131,37 @@ export function generatePassword(
       )
     : "";
 
-  // Combine available characters
   const fullPool = lower + upper + nums + syms + custom;
+  return { lower, upper, nums, syms, custom, fullPool };
+}
+
+/**
+ * Return the exact number of unique characters in the generator's active pool.
+ */
+export function calculatePoolSize(options: PasswordGeneratorOptions = {}): number {
+  const { fullPool } = buildPool(options);
+  return new Set(fullPool.split("")).size;
+}
+
+/**
+ * Calculate entropy in bits based on exact pool size and password length.
+ */
+export function calculateEntropy(options: PasswordGeneratorOptions = {}): number {
+  const poolSize = calculatePoolSize(options);
+  const length = Math.max(1, options.length ?? DEFAULT_GENERATOR_OPTIONS.length);
+  return poolSize > 1 ? Math.round(length * Math.log2(poolSize)) : 0;
+}
+
+/**
+ * Generate a cryptographically secure random password based on the given configuration.
+ */
+export function generatePassword(
+  options: PasswordGeneratorOptions = {},
+): string {
+  const opts = { ...DEFAULT_GENERATOR_OPTIONS, ...options };
+  const targetLength = Math.max(1, opts.length);
+  const { lower, upper, nums, syms, fullPool } = buildPool(options);
+
   if (!fullPool) {
     throw new Error(
       "Cannot generate password: character pool is empty with the current options.",
