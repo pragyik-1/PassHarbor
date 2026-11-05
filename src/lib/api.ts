@@ -113,19 +113,25 @@ export async function queryEntries(
   return await invoke<EntryQueryResult>("query_entries_cmd", { query });
 }
 
-export async function getEntry(id: number): Promise<EntryDetail | null> {
-  return await invoke<EntryDetail | null>("get_entry_cmd", { id });
+export async function getEntry(id: number): Promise<EntryDetail> {
+  return await invoke<EntryDetail>("get_entry_cmd", { id });
 }
 
-export async function updateEntry(id: number, entry: UpdateEntry): Promise<boolean> {
-  return await invoke<boolean>("update_entry_cmd", { id, entry });
+export async function updateEntry(
+  id: number,
+  entry: UpdateEntry,
+): Promise<void> {
+  await invoke<void>("update_entry_cmd", { id, entry });
 }
 
-export async function deleteEntry(id: number): Promise<boolean> {
-  return await invoke<boolean>("delete_entry_cmd", { id });
+export async function deleteEntry(id: number): Promise<void> {
+  await invoke<void>("delete_entry_cmd", { id });
 }
 
-export async function setPassword(entryId: number, password: string): Promise<void> {
+export async function setPassword(
+  entryId: number,
+  password: string,
+): Promise<void> {
   await invoke<void>("set_password_cmd", { entryId, password });
 }
 
@@ -149,4 +155,9 @@ export function isVaultLockedError(error: unknown): boolean {
 /** Whether an IPC failure indicates an invalid master passphrase. */
 export function isInvalidMasterKeyError(error: unknown): boolean {
   return String(error).includes("Invalid master key");
+}
+
+/** Whether an IPC failure indicates the target entry was not found. */
+export function isEntryNotFoundError(error: unknown): boolean {
+  return String(error).includes("not found");
 }

@@ -14,6 +14,7 @@
     getSession,
     listCustomKinds,
     isVaultLockedError,
+    isEntryNotFoundError,
   } from "#lib/api.ts";
   import type {
     EntrySummary,
@@ -147,16 +148,16 @@
       const result = await getEntry(id);
       if (nonce !== detailNonce) return; // stale — another selection happened
       detail = result;
-      if (!result) {
-        // Entry no longer exists
-        selectedId = null;
-        toast.show({ message: "Entry not found", variant: "warn" });
-        await refreshList();
-      }
     } catch (err) {
       if (nonce !== detailNonce) return;
       if (isVaultLockedError(err)) {
         handleVaultLocked();
+        return;
+      }
+      if (isEntryNotFoundError(err)) {
+        selectedId = null;
+        toast.show({ message: "Entry not found", variant: "warn" });
+        await refreshList();
         return;
       }
       toast.show({
@@ -242,20 +243,21 @@
     formBusy = true;
     formError = "";
     try {
-      const ok = await updateEntry(selectedId, data);
+      await updateEntry(selectedId, data);
       formOpen = false;
-      if (!ok) {
-        toast.show({ message: "Entry not found", variant: "warn" });
-        selectedId = null;
-        detail = null;
-      } else {
-        toast.show({ message: "Entry updated", variant: "success" });
-      }
+      toast.show({ message: "Entry updated", variant: "success" });
       await refreshList();
       if (selectedId) void loadDetail(selectedId);
     } catch (err) {
       if (isVaultLockedError(err)) {
         handleVaultLocked();
+        return;
+      }
+      if (isEntryNotFoundError(err)) {
+        toast.show({ message: "Entry not found", variant: "warn" });
+        selectedId = null;
+        detail = null;
+        await refreshList();
         return;
       }
       formError = String(err);
@@ -274,19 +276,22 @@
     if (!selectedId) return;
     confirmBusy = true;
     try {
-      const ok = await deleteEntry(selectedId);
+      await deleteEntry(selectedId);
       confirmOpen = false;
       selectedId = null;
       detail = null;
-      if (!ok) {
-        toast.show({ message: "Entry not found", variant: "warn" });
-      } else {
-        toast.show({ message: "Entry deleted", variant: "success" });
-      }
+      toast.show({ message: "Entry deleted", variant: "success" });
       await refreshList();
     } catch (err) {
       if (isVaultLockedError(err)) {
         handleVaultLocked();
+        return;
+      }
+      if (isEntryNotFoundError(err)) {
+        toast.show({ message: "Entry not found", variant: "warn" });
+        selectedId = null;
+        detail = null;
+        await refreshList();
         return;
       }
       toast.show({ message: String(err), variant: "danger" });

@@ -218,8 +218,8 @@ impl Database {
         Ok(EntryQueryResult { entries, kinds })
     }
 
-    /// A single entry with its password history, or `None` if the id is unknown.
-    pub fn get_entry(&self, id: i64) -> Result<Option<EntryDetail>> {
+    /// A single entry with its password history, or Error::EntryNotFound if missing.
+    pub fn get_entry(&self, id: i64) -> Result<EntryDetail> {
         let entry = self
             .conn
             .query_row(
@@ -231,7 +231,7 @@ impl Database {
             .optional()
             .map_err(|e| Error::Database(format!("Failed to load entry: {e}")))?;
         let Some(entry) = entry else {
-            return Ok(None);
+            return Err(Error::EntryNotFound(id));
         };
 
         let mut stmt = self
@@ -256,16 +256,16 @@ impl Database {
         all_passwords.reverse();
         let history = all_passwords;
 
-        Ok(Some(EntryDetail {
+        Ok(EntryDetail {
             entry,
             current_password,
             history,
-        }))
+        })
     }
 
     /// Replace an entry's metadata and bump `updated_at`. Passwords are never
-    /// touched here. Returns `false` if the id is unknown.
-    pub fn update_entry(&self, id: i64, update: UpdateEntry) -> Result<bool> {
+    /// touched here. Returns Error::EntryNotFound if the id is unknown.
+    pub fn update_entry(&self, id: i64, update: UpdateEntry) -> Result<()> {
         update.validate()?;
         let kind = update.kind.trim();
         let name = update.name.trim();
@@ -287,17 +287,23 @@ impl Database {
                 ],
             )
             .map_err(|e| Error::Database(format!("Failed to update entry: {e}")))?;
-        Ok(changed > 0)
+        if changed == 0 {
+            return Err(Error::EntryNotFound(id));
+        }
+        Ok(())
     }
 
     /// Delete an entry with its password history.
-    /// Returns `false` if the id is unknown.
-    pub fn delete_entry(&self, id: i64) -> Result<bool> {
+    /// Returns Error::EntryNotFound if the id is unknown.
+    pub fn delete_entry(&self, id: i64) -> Result<()> {
         let deleted = self
             .conn
             .execute("DELETE FROM entries WHERE id = ?1", params![id])
             .map_err(|e| Error::Database(format!("Failed to delete entry: {e}")))?;
-        Ok(deleted > 0)
+        if deleted == 0 {
+            return Err(Error::EntryNotFound(id));
+        }
+        Ok(())
     }
 
     /// Store a new password version for an entry, keeping older versions as
@@ -697,7 +703,7 @@ mod tests {
         entry.password = Some(SecretString::from("hunter2"));
         let id = db.add_entry(entry).expect("add entry");
 
-        let detail = db.get_entry(id).expect("get entry").expect("entry exists");
+        let detail = db.get_entry(id).expect("get entry");
         assert_eq!(detail.entry.name, "example.com");
         assert_eq!(
             detail.current_password.as_ref().map(|p| p.expose_secret()),
@@ -793,7 +799,7 @@ mod tests {
         db.set_password(id, &SecretString::from("new"))
             .expect("second password");
 
-        let detail = db.get_entry(id).expect("get entry").expect("entry exists");
+        let detail = db.get_entry(id).expect("get entry");
         assert_eq!(
             detail.current_password.as_ref().map(|p| p.expose_secret()),
             Some("new")
@@ -808,7 +814,7 @@ mod tests {
         // Setting the exact same password again does not duplicate history
         db.set_password(id, &SecretString::from("new"))
             .expect("same password");
-        let detail = db.get_entry(id).expect("get entry").expect("entry exists");
+        let detail = db.get_entry(id).expect("get entry");
         assert_eq!(detail.history.len(), 1);
     }
 
@@ -824,7 +830,7 @@ mod tests {
                 .expect("set password");
         }
 
-        let detail = db.get_entry(id).expect("get entry").expect("entry exists");
+        let detail = db.get_entry(id).expect("get entry");
         assert_eq!(
             detail.current_password.as_ref().map(|p| p.expose_secret()),
             Some("pw-24")
@@ -854,7 +860,7 @@ mod tests {
         let db = Database::create(&path, &key_a()).expect("create database");
 
         let id = db.add_entry(new_entry("example.com")).expect("add entry");
-        let before = db.get_entry(id).expect("get").expect("exists").entry;
+        let before = db.get_entry(id).expect("get").entry;
 
         let update = UpdateEntry {
             kind: "login".to_string(),
@@ -864,20 +870,17 @@ mod tests {
             url: None,
             note: Some("note".to_string()),
         };
-        let found = db.update_entry(id, update).expect("update");
-        assert!(found);
+        db.update_entry(id, update).expect("update");
 
-        let after = db.get_entry(id).expect("get").expect("exists").entry;
+        let after = db.get_entry(id).expect("get").entry;
         assert_eq!(after.name, "renamed.example");
         assert_eq!(after.username.as_deref(), Some("other"));
         assert_eq!(after.note.as_deref(), Some("note"));
         assert!(after.url.is_none());
         assert!(after.updated_at >= before.updated_at);
-        // `updated_at` is stored in whole seconds, so it must land on the
-        // current second rather than merely not go backwards.
         assert!((after.updated_at - now_unix()).abs() <= 1);
 
-        let found = db
+        let err = db
             .update_entry(
                 999,
                 UpdateEntry {
@@ -889,8 +892,8 @@ mod tests {
                     note: None,
                 },
             )
-            .expect("update");
-        assert!(!found);
+            .expect_err("update unknown");
+        assert!(matches!(err, Error::EntryNotFound(999)));
     }
 
     #[test]
@@ -905,9 +908,11 @@ mod tests {
         db.set_password(id, &SecretString::from("two"))
             .expect("password");
 
-        let deleted = db.delete_entry(id).expect("delete");
-        assert!(deleted);
-        assert!(db.get_entry(id).expect("get").is_none());
+        db.delete_entry(id).expect("delete");
+        assert!(matches!(
+            db.get_entry(id).expect_err("entry gone"),
+            Error::EntryNotFound(i) if i == id
+        ));
 
         // Cascade must have removed the password rows, not just the entry.
         let remaining: i64 = db
@@ -916,8 +921,8 @@ mod tests {
             .expect("count passwords");
         assert_eq!(remaining, 0);
 
-        let deleted = db.delete_entry(id).expect("delete again");
-        assert!(!deleted);
+        let err = db.delete_entry(id).expect_err("delete again");
+        assert!(matches!(err, Error::EntryNotFound(i) if i == id));
     }
 
     #[test]

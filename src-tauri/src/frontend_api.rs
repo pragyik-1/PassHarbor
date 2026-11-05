@@ -116,7 +116,7 @@ pub fn query_entries_cmd(app: tauri::AppHandle, query: EntryQuery) -> IPCResult<
 }
 
 #[tauri::command(async)]
-pub fn get_entry_cmd(app: tauri::AppHandle, id: i64) -> IPCResult<Option<EntryDetail>> {
+pub fn get_entry_cmd(app: tauri::AppHandle, id: i64) -> IPCResult<EntryDetail> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
     let active = session.as_ref().ok_or(Error::VaultLocked)?;
@@ -124,19 +124,21 @@ pub fn get_entry_cmd(app: tauri::AppHandle, id: i64) -> IPCResult<Option<EntryDe
 }
 
 #[tauri::command(async)]
-pub fn update_entry_cmd(app: tauri::AppHandle, id: i64, entry: UpdateEntry) -> IPCResult<bool> {
+pub fn update_entry_cmd(app: tauri::AppHandle, id: i64, entry: UpdateEntry) -> IPCResult<()> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
     let active = session.as_ref().ok_or(Error::VaultLocked)?;
-    Ok(active.db.update_entry(id, entry)?)
+    active.db.update_entry(id, entry)?;
+    Ok(())
 }
 
 #[tauri::command(async)]
-pub fn delete_entry_cmd(app: tauri::AppHandle, id: i64) -> IPCResult<bool> {
+pub fn delete_entry_cmd(app: tauri::AppHandle, id: i64) -> IPCResult<()> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
     let active = session.as_ref().ok_or(Error::VaultLocked)?;
-    Ok(active.db.delete_entry(id)?)
+    active.db.delete_entry(id)?;
+    Ok(())
 }
 
 #[tauri::command(async)]
