@@ -4,17 +4,26 @@
   import { ToastManager, toast, Button } from "@hermitk/bluenite";
   import { ArrowLeftIcon } from "lucide-svelte";
   import {
-    listEntries,
+    queryEntries,
     getEntry,
     addEntry,
     updateEntry,
     deleteEntry,
     setPassword,
     lock,
+    listCustomKinds,
+    isVaultLockedError,
   } from "#lib/api.ts";
-  import type { Entry, EntryDetail, NewEntry, UpdateEntry } from "#lib/api.ts";
+  import type {
+    EntrySummary,
+    EntryDetail,
+    NewEntry,
+    UpdateEntry,
+    KindCount,
+  } from "#lib/api.ts";
+  import { DEFAULT_KINDS, mergeKinds } from "#lib/kinds.ts";
   import { recallVault, forgetVault } from "#lib/session.ts";
-  import { getAllKinds } from "#lib/kinds.ts";
+  import type { SortKey } from "#lib/components/dashboard/EntryList.svelte";
 
   import AppShell from "#lib/components/dashboard/AppShell.svelte";
   import EntryList from "#lib/components/dashboard/EntryList.svelte";
@@ -25,17 +34,28 @@
 
   let vaultName = $state<string | null>(null);
 
-  let entries = $state<Entry[]>([]);
+  let entries = $state<EntrySummary[]>([]);
+  let kindCounts = $state<KindCount[]>([]);
+  let customKinds = $state<string[]>([]);
+  let totalCount = $derived(kindCounts.reduce((acc, k) => acc + k.count, 0));
   let listLoading = $state(true);
 
+  let search = $state("");
   let kindFilter = $state<string | null>(null);
+  let sortKey = $state<SortKey>("name");
 
   function setKindFilter(k: string | null) {
     kindFilter = k;
   }
 
-  // All available kinds: union of built-in + custom from localStorage + active entries
-  const allKinds = $derived(getAllKinds(entries.map((e) => e.kind)));
+  // All available kinds: built-in + vault custom kinds + kinds used by entries
+  const allKinds = $derived(
+    mergeKinds(
+      DEFAULT_KINDS,
+      customKinds,
+      kindCounts.map((k) => k.kind),
+    ),
+  );
 
   let selectedId = $state<number | null>(null);
   let detail = $state<EntryDetail | null>(null);
@@ -59,7 +79,8 @@
   let confirmBusy = $state(false);
 
   const selectedEntry = $derived(
-    entries.find((e) => e.id === selectedId) ?? null,
+    entries.find((e) => e.id === selectedId) ??
+      (detail?.entry.id === selectedId ? detail.entry : null),
   );
 
   function handleVaultLocked() {
@@ -72,14 +93,22 @@
     void goto("/", { replace: true });
   }
 
-  function isVaultLockedError(err: unknown): boolean {
-    return String(err).includes("Vault is locked");
-  }
+  /** Guards against a stale search/filter response overwriting a newer one. */
+  let listNonce = 0;
 
   async function refreshList(): Promise<void> {
+    const nonce = ++listNonce;
     try {
-      entries = await listEntries();
+      const res = await queryEntries({
+        search,
+        kind: kindFilter,
+        sort: sortKey,
+      });
+      if (nonce !== listNonce) return;
+      entries = res.entries;
+      kindCounts = res.kinds;
     } catch (err) {
+      if (nonce !== listNonce) return;
       if (isVaultLockedError(err)) {
         handleVaultLocked();
         return;
@@ -87,6 +116,25 @@
       toast.show({ message: "Failed to refresh entries", variant: "danger" });
     }
   }
+
+  async function loadCustomKinds(): Promise<void> {
+    try {
+      customKinds = await listCustomKinds();
+    } catch (err) {
+      if (isVaultLockedError(err)) {
+        handleVaultLocked();
+        return;
+      }
+      toast.show({ message: "Failed to load custom kinds", variant: "danger" });
+    }
+  }
+
+  $effect(() => {
+    // Re-query whenever search, kindFilter, or sortKey changes (when unlocked)
+    if (vaultName) {
+      void refreshList();
+    }
+  });
 
   async function loadDetail(id: number): Promise<void> {
     const nonce = ++detailNonce;
@@ -347,7 +395,7 @@
     void (async () => {
       listLoading = true;
       try {
-        entries = await listEntries();
+        await Promise.all([refreshList(), loadCustomKinds()]);
       } catch (err) {
         if (isVaultLockedError(err)) {
           handleVaultLocked();
@@ -370,7 +418,8 @@
 {#if vaultName}
   <AppShell
     {vaultName}
-    {entries}
+    {totalCount}
+    {kindCounts}
     {kindFilter}
     onfilterkind={setKindFilter}
     {lockBusy}
@@ -383,9 +432,13 @@
       <div class="list-col" class:has-selection={selectedId !== null}>
         <EntryList
           {entries}
+          kinds={kindCounts}
+          {totalCount}
           {selectedId}
           loading={listLoading}
           {kindFilter}
+          bind:search
+          bind:sortKey
           onfilterkind={setKindFilter}
           onselect={selectEntry}
           onnew={openCreate}
@@ -427,7 +480,7 @@
   <EntryFormModal
     bind:open={formOpen}
     mode={formMode}
-    entry={formMode === "edit" ? (selectedEntry ?? null) : null}
+    entry={formMode === "edit" ? (detail?.entry ?? null) : null}
     availableKinds={allKinds}
     busy={formBusy}
     error={formError}

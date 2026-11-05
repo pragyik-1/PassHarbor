@@ -33,6 +33,12 @@ const MIGRATIONS: &[&str] = &[
         created_at INTEGER DEFAULT (unixepoch()),
         FOREIGN KEY (entry_id) REFERENCES entries(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE custom_kinds (
+        id         INTEGER PRIMARY KEY,
+        name       TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        created_at INTEGER DEFAULT (unixepoch())
+    );
     ",
 ];
 
@@ -48,6 +54,41 @@ pub struct Entry {
     pub note: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+/// Lightweight summary of an entry for listing, search, and filtering without note payload.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EntrySummary {
+    pub id: i64,
+    pub kind: String,
+    pub name: String,
+    pub username: Option<String>,
+    pub email: Option<String>,
+    pub url: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+/// Aggregated count of entries for a kind.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct KindCount {
+    pub kind: String,
+    pub count: i64,
+}
+
+/// Criteria for searching, filtering, and sorting entries in SQL.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct EntryQuery {
+    pub search: Option<String>,
+    pub kind: Option<String>,
+    pub sort: Option<String>,
+}
+
+/// Result returned by entry search/filtering query.
+#[derive(Debug, Clone, Serialize)]
+pub struct EntryQueryResult {
+    pub entries: Vec<EntrySummary>,
+    pub kinds: Vec<KindCount>,
 }
 
 /// One stored version of an entry's password. Older versions are kept as

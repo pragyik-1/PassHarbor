@@ -20,6 +20,33 @@ export interface Entry {
   updated_at: number;
 }
 
+export interface EntrySummary {
+  id: number;
+  kind: string;
+  name: string;
+  username: string | null;
+  email: string | null;
+  url: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface KindCount {
+  kind: string;
+  count: number;
+}
+
+export interface EntryQuery {
+  search?: string | null;
+  kind?: string | null;
+  sort?: "name" | "updated" | "created" | null;
+}
+
+export interface EntryQueryResult {
+  entries: EntrySummary[];
+  kinds: KindCount[];
+}
+
 export interface Password {
   id: number;
   entry_id: number;
@@ -70,6 +97,12 @@ export async function listEntries(): Promise<Entry[]> {
   return await invoke<Entry[]>("list_entries_cmd");
 }
 
+export async function queryEntries(
+  query: EntryQuery = {},
+): Promise<EntryQueryResult> {
+  return await invoke<EntryQueryResult>("query_entries_cmd", { query });
+}
+
 export async function getEntry(id: number): Promise<EntryDetail | null> {
   return await invoke<EntryDetail | null>("get_entry_cmd", { id });
 }
@@ -84,6 +117,18 @@ export async function deleteEntry(id: number): Promise<boolean> {
 
 export async function setPassword(entryId: number, password: string): Promise<void> {
   await invoke<void>("set_password_cmd", { entryId, password });
+}
+
+export async function addCustomKind(kind: string): Promise<void> {
+  await invoke<void>("add_custom_kind_cmd", { kind });
+}
+
+export async function removeCustomKind(kind: string): Promise<void> {
+  await invoke<void>("remove_custom_kind_cmd", { kind });
+}
+
+export async function listCustomKinds(): Promise<string[]> {
+  return await invoke<string[]>("list_custom_kinds_cmd");
 }
 
 /** Whether an IPC failure means the vault session has been closed. */

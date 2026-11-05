@@ -7,17 +7,21 @@
     SortAscIcon,
     PlusIcon,
   } from "lucide-svelte";
-  import type { Entry } from "#lib/api.ts";
-  import { countKinds, kindMatches, isKindActive } from "#lib/kinds.ts";
+  import type { EntrySummary, KindCount } from "#lib/api.ts";
+  import { isKindActive } from "#lib/kinds.ts";
   import { timeAgo } from "#lib/time.ts";
 
-  type SortKey = "name" | "updated" | "created";
+  export type SortKey = "name" | "updated" | "created";
 
   interface Props {
-    entries: Entry[];
+    entries: EntrySummary[];
+    kinds: KindCount[];
+    totalCount: number;
     selectedId: number | null;
     loading: boolean;
     kindFilter: string | null;
+    search?: string;
+    sortKey?: SortKey;
     onfilterkind: (k: string | null) => void;
     onselect: (id: number) => void;
     onnew: () => void;
@@ -25,55 +29,26 @@
 
   let {
     entries,
+    kinds,
+    totalCount,
     selectedId,
     loading,
     kindFilter,
+    search = $bindable(""),
+    sortKey = $bindable<SortKey>("name"),
     onfilterkind,
     onselect,
     onnew,
   }: Props = $props();
 
-  let search = $state("");
-  let sortKey = $state<SortKey>("name");
-
   let sortOpen = $state(false);
   let sortRef: HTMLButtonElement | null = $state(null);
-
-  const kinds = $derived(countKinds(entries.map((entry) => entry.kind)));
-
-  const filtered = $derived.by(() => {
-    const q = search.trim().toLowerCase();
-
-    let result = entries.filter((e) => {
-      if (!kindMatches(e.kind, kindFilter)) return false;
-      if (!q) return true;
-      return (
-        e.name.toLowerCase().includes(q) ||
-        (e.username ?? "").toLowerCase().includes(q) ||
-        (e.email ?? "").toLowerCase().includes(q) ||
-        (e.url ?? "").toLowerCase().includes(q) ||
-        (e.note ?? "").toLowerCase().includes(q)
-      );
-    });
-
-    if (sortKey === "name") {
-      result = result.sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
-      );
-    } else if (sortKey === "updated") {
-      result = result.sort((a, b) => b.updated_at - a.updated_at);
-    } else {
-      result = result.sort((a, b) => b.created_at - a.created_at);
-    }
-
-    return result;
-  });
 
   function clearSearch() {
     search = "";
   }
 
-  function secondaryLine(e: Entry): string {
+  function secondaryLine(e: EntrySummary): string {
     return e.username ?? e.email ?? e.url ?? "";
   }
 
@@ -175,7 +150,7 @@
         aria-pressed={kindFilter === null}
       >
         All
-        <span class="chip-count">{entries.length}</span>
+        <span class="chip-count">{totalCount}</span>
       </button>
       {#each kinds as { kind, count } (kind)}
         {@const active = isKindActive(kind, kindFilter)}
@@ -206,7 +181,7 @@
           <div class="sk-time"></div>
         </div>
       {/each}
-    {:else if entries.length === 0}
+    {:else if totalCount === 0}
       <div class="empty-state">
         <div class="empty-icon-wrap" aria-hidden="true">
           <ShieldIcon size={26} />
@@ -222,7 +197,7 @@
           Add your first entry
         </Button>
       </div>
-    {:else if filtered.length === 0}
+    {:else if entries.length === 0}
       <div class="empty-state">
         <p class="empty-title">No entries match your search</p>
         <button class="link-btn" type="button" onclick={clearSearch}>
@@ -230,7 +205,7 @@
         </button>
       </div>
     {:else}
-      {#each filtered as entry (entry.id)}
+      {#each entries as entry (entry.id)}
         {@const secondary = secondaryLine(entry)}
         <button
           class="entry-row"

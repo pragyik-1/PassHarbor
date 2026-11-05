@@ -1,5 +1,6 @@
 use crate::database::{
-    Database, DbKey, Entry, EntryDetail, NewEntry, UpdateEntry, VaultManifest, VaultStore,
+    Database, DbKey, Entry, EntryDetail, EntryQuery, EntryQueryResult, NewEntry, UpdateEntry,
+    VaultManifest, VaultStore,
 };
 use crate::master_key::{MIN_PASSPHRASE_LEN, MasterKey};
 use crate::prelude::*;
@@ -92,6 +93,14 @@ pub fn list_entries_cmd(app: tauri::AppHandle) -> IPCResult<Vec<Entry>> {
 }
 
 #[tauri::command(async)]
+pub fn query_entries_cmd(app: tauri::AppHandle, query: EntryQuery) -> IPCResult<EntryQueryResult> {
+    let app_state = AppState::resolve(&app);
+    let session = app_state.session();
+    let db = session.as_ref().ok_or(Error::VaultLocked)?;
+    Ok(db.query_entries(query)?)
+}
+
+#[tauri::command(async)]
 pub fn get_entry_cmd(app: tauri::AppHandle, id: i64) -> IPCResult<Option<EntryDetail>> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
@@ -124,7 +133,34 @@ pub fn set_password_cmd(
     let app_state = AppState::resolve(&app);
     let session = app_state.session();
     let db = session.as_ref().ok_or(Error::VaultLocked)?;
-    Ok(db.set_password(entry_id, &password)?)
+    db.set_password(entry_id, &password)?;
+    Ok(())
+}
+
+#[tauri::command(async)]
+pub fn add_custom_kind_cmd(app: tauri::AppHandle, kind: String) -> IPCResult<()> {
+    let app_state = AppState::resolve(&app);
+    let session = app_state.session();
+    let db = session.as_ref().ok_or(Error::VaultLocked)?;
+    db.add_custom_kind(&kind)?;
+    Ok(())
+}
+
+#[tauri::command(async)]
+pub fn remove_custom_kind_cmd(app: tauri::AppHandle, kind: String) -> IPCResult<()> {
+    let app_state = AppState::resolve(&app);
+    let session = app_state.session();
+    let db = session.as_ref().ok_or(Error::VaultLocked)?;
+    db.remove_custom_kind(&kind)?;
+    Ok(())
+}
+
+#[tauri::command(async)]
+pub fn list_custom_kinds_cmd(app: tauri::AppHandle) -> IPCResult<Vec<String>> {
+    let app_state = AppState::resolve(&app);
+    let session = app_state.session();
+    let db = session.as_ref().ok_or(Error::VaultLocked)?;
+    Ok(db.list_custom_kinds()?)
 }
 
 #[cfg(test)]

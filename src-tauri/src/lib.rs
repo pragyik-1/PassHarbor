@@ -20,10 +20,14 @@ pub fn run() {
             frontend_api::lock_cmd,
             frontend_api::add_entry_cmd,
             frontend_api::list_entries_cmd,
+            frontend_api::query_entries_cmd,
             frontend_api::get_entry_cmd,
             frontend_api::update_entry_cmd,
             frontend_api::delete_entry_cmd,
-            frontend_api::set_password_cmd
+            frontend_api::set_password_cmd,
+            frontend_api::add_custom_kind_cmd,
+            frontend_api::remove_custom_kind_cmd,
+            frontend_api::list_custom_kinds_cmd
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

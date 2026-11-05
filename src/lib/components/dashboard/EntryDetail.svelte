@@ -12,13 +12,13 @@
     ClockIcon,
     PlusIcon,
   } from "lucide-svelte";
-  import type { Entry, EntryDetail } from "#lib/api.ts";
+  import type { EntrySummary, EntryDetail } from "#lib/api.ts";
   import { timeAgo, formatDateTime } from "#lib/time.ts";
   import MetaRow from "./MetaRow.svelte";
   import SecretField from "./SecretField.svelte";
 
   interface Props {
-    entry: Entry | null;
+    entry: EntrySummary | null;
     detail: EntryDetail | null;
     loading: boolean;
     onedit: () => void;

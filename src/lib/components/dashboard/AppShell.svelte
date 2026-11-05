@@ -9,14 +9,15 @@
     TagIcon,
     SettingsIcon,
   } from "lucide-svelte";
-  import type { Entry } from "#lib/api.ts";
-  import { countKinds, isKindActive } from "#lib/kinds.ts";
+  import type { KindCount } from "#lib/api.ts";
+  import { isKindActive } from "#lib/kinds.ts";
   import BrandMark from "#lib/components/BrandMark.svelte";
   import ThemeToggle from "#lib/components/ThemeToggle.svelte";
 
   interface Props {
     vaultName: string;
-    entries: Entry[];
+    totalCount: number;
+    kindCounts: KindCount[];
     kindFilter: string | null;
     onfilterkind: (k: string | null) => void;
     lockBusy: boolean;
@@ -28,7 +29,8 @@
 
   let {
     vaultName,
-    entries,
+    totalCount,
+    kindCounts,
     kindFilter,
     onfilterkind,
     lockBusy,
@@ -37,8 +39,6 @@
     onnew,
     children,
   }: Props = $props();
-
-  const kindCounts = $derived(countKinds(entries.map((entry) => entry.kind)));
 </script>
 
 <div class="shell">
@@ -74,12 +74,12 @@
         type="button"
         class="nav-item"
         class:active={kindFilter === null}
-        aria-label="All items — {entries.length} entries"
+        aria-label="All items — {totalCount} entries"
         onclick={() => onfilterkind(null)}
       >
         <ListIcon size={15} aria-hidden="true" />
         <span class="nav-label">All items</span>
-        <span class="nav-count" aria-hidden="true">{entries.length}</span>
+        <span class="nav-count" aria-hidden="true">{totalCount}</span>
       </button>
 
       {#if kindCounts.length > 0}

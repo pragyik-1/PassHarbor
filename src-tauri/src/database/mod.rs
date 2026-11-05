@@ -3,7 +3,10 @@ mod schema;
 mod vault_store;
 
 pub use key::DbKey;
-pub use schema::{Entry, EntryDetail, NewEntry, Password, UpdateEntry};
+pub use schema::{
+    Entry, EntryDetail, EntryQuery, EntryQueryResult, EntrySummary, KindCount, NewEntry, Password,
+    UpdateEntry,
+};
 pub use vault_store::{VaultManifest, VaultStore};
 
 use std::fs;
@@ -142,6 +145,84 @@ impl Database {
         Ok(entries)
     }
 
+    /// Search, filter, and sort entries entirely in SQL, returning entry summaries
+    /// (excluding notes) along with per-kind counts.
+    pub fn query_entries(&self, query: EntryQuery) -> Result<EntryQueryResult> {
+        let search_param = query
+            .search
+            .as_deref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty());
+        let kind_param = query
+            .kind
+            .as_deref()
+            .map(|k| k.trim())
+            .filter(|k| !k.is_empty());
+
+        let order_clause = match query.sort.as_deref() {
+            Some("updated") => "ORDER BY updated_at DESC, name COLLATE NOCASE ASC",
+            Some("created") => "ORDER BY created_at DESC, name COLLATE NOCASE ASC",
+            _ => "ORDER BY name COLLATE NOCASE ASC",
+        };
+
+        let sql = format!(
+            "SELECT id, kind, name, username, email, url, created_at, updated_at
+             FROM entries
+             WHERE (?1 IS NULL OR name LIKE '%' || ?1 || '%'
+                               OR coalesce(username, '') LIKE '%' || ?1 || '%'
+                               OR coalesce(email, '') LIKE '%' || ?1 || '%'
+                               OR coalesce(url, '') LIKE '%' || ?1 || '%'
+                               OR coalesce(note, '') LIKE '%' || ?1 || '%')
+               AND (?2 IS NULL OR kind = ?2 COLLATE NOCASE)
+             {order_clause}"
+        );
+
+        let mut stmt = self
+            .conn
+            .prepare(&sql)
+            .map_err(|e| Error::Database(format!("Failed to prepare query: {e}")))?;
+
+        let entries = stmt
+            .query_map(params![search_param, kind_param], |row| {
+                Ok(EntrySummary {
+                    id: row.get(0)?,
+                    kind: row.get(1)?,
+                    name: row.get(2)?,
+                    username: row.get(3)?,
+                    email: row.get(4)?,
+                    url: row.get(5)?,
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
+                })
+            })
+            .map_err(|e| Error::Database(format!("Failed to query entries: {e}")))?
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|e| Error::Database(format!("Failed to read entry row: {e}")))?;
+
+        let mut kind_stmt = self
+            .conn
+            .prepare(
+                "SELECT kind, COUNT(*)
+                 FROM entries
+                 GROUP BY kind COLLATE NOCASE
+                 ORDER BY kind COLLATE NOCASE",
+            )
+            .map_err(|e| Error::Database(format!("Failed to prepare kind counts query: {e}")))?;
+
+        let kinds = kind_stmt
+            .query_map([], |row| {
+                Ok(KindCount {
+                    kind: row.get(0)?,
+                    count: row.get(1)?,
+                })
+            })
+            .map_err(|e| Error::Database(format!("Failed to count kinds: {e}")))?
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|e| Error::Database(format!("Failed to read kind count row: {e}")))?;
+
+        Ok(EntryQueryResult { entries, kinds })
+    }
+
     /// A single entry with its password history, or `None` if the id is unknown.
     pub fn get_entry(&self, id: i64) -> Result<Option<EntryDetail>> {
         let entry = self
@@ -238,6 +319,55 @@ impl Database {
         )
         .map_err(|e| Error::Database(format!("Failed to insert password: {e}")))?;
         Ok(())
+    }
+
+    /// Add a user-defined custom kind to the vault database.
+    pub fn add_custom_kind(&self, kind: &str) -> Result<()> {
+        let trimmed = kind.trim();
+        if trimmed.is_empty() {
+            return Err(Error::InvalidEntry("kind must not be empty".to_string()));
+        }
+        if trimmed.chars().count() > schema::MAX_KIND_LEN {
+            return Err(Error::InvalidEntry(format!(
+                "kind must be at most {} characters",
+                schema::MAX_KIND_LEN
+            )));
+        }
+        self.conn
+            .execute(
+                "INSERT OR IGNORE INTO custom_kinds (name) VALUES (?1)",
+                params![trimmed],
+            )
+            .map_err(|e| Error::Database(format!("Failed to insert custom kind: {e}")))?;
+        Ok(())
+    }
+
+    /// Remove a custom kind from the vault database.
+    pub fn remove_custom_kind(&self, kind: &str) -> Result<()> {
+        let trimmed = kind.trim();
+        self.conn
+            .execute(
+                "DELETE FROM custom_kinds WHERE name = ?1 COLLATE NOCASE",
+                params![trimmed],
+            )
+            .map_err(|e| Error::Database(format!("Failed to remove custom kind: {e}")))?;
+        Ok(())
+    }
+
+    /// List all custom kinds stored in the vault database.
+    pub fn list_custom_kinds(&self) -> Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT name FROM custom_kinds ORDER BY name COLLATE NOCASE")
+            .map_err(|e| {
+                Error::Database(format!("Failed to prepare list custom kinds query: {e}"))
+            })?;
+        let kinds = stmt
+            .query_map([], |row| row.get(0))
+            .map_err(|e| Error::Database(format!("Failed to list custom kinds: {e}")))?
+            .collect::<std::result::Result<Vec<String>, _>>()
+            .map_err(|e| Error::Database(format!("Failed to read custom kind row: {e}")))?;
+        Ok(kinds)
     }
 }
 
@@ -715,6 +845,65 @@ mod tests {
 
         let deleted = db.delete_entry(id).expect("delete again");
         assert!(!deleted);
+    }
+
+    #[test]
+    fn query_entries_filters_and_counts_kinds() {
+        let dir = TempDir::new();
+        let path = dir.path().join("vault.db");
+        let db = Database::create(&path, &key_a()).expect("create database");
+
+        let mut a = new_entry("GitHub");
+        a.kind = "Login".to_string();
+        a.username = Some("octocat".to_string());
+        db.add_entry(a).expect("add a");
+
+        let mut b = new_entry("GitLab");
+        b.kind = "login".to_string(); // case variation
+        b.username = Some("gitlab-user".to_string());
+        db.add_entry(b).expect("add b");
+
+        let mut c = new_entry("Wi-Fi Pass");
+        c.kind = "Secure Note".to_string();
+        db.add_entry(c).expect("add c");
+
+        // Filter by kind
+        let res = db
+            .query_entries(EntryQuery {
+                kind: Some("login".to_string()),
+                ..Default::default()
+            })
+            .expect("query login");
+        assert_eq!(res.entries.len(), 2);
+        assert_eq!(res.kinds.len(), 2); // "Login" (or "login") and "Secure Note"
+
+        // Search text matching username
+        let res = db
+            .query_entries(EntryQuery {
+                search: Some("octocat".to_string()),
+                ..Default::default()
+            })
+            .expect("search username");
+        assert_eq!(res.entries.len(), 1);
+        assert_eq!(res.entries[0].name, "GitHub");
+    }
+
+    #[test]
+    fn custom_kinds_crud() {
+        let dir = TempDir::new();
+        let path = dir.path().join("vault.db");
+        let db = Database::create(&path, &key_a()).expect("create database");
+
+        assert!(db.list_custom_kinds().expect("list").is_empty());
+        db.add_custom_kind("Server").expect("add kind");
+        db.add_custom_kind("server").expect("add duplicate ignore");
+
+        let kinds = db.list_custom_kinds().expect("list");
+        assert_eq!(kinds, vec!["Server"]);
+
+        db.remove_custom_kind("SERVER")
+            .expect("remove case insensitive");
+        assert!(db.list_custom_kinds().expect("list").is_empty());
     }
 
     #[cfg(unix)]

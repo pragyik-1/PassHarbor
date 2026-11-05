@@ -5,7 +5,6 @@
         Button,
         Input,
         Card,
-        ToastManager,
         toast,
         theme,
         toggleTheme,
@@ -22,31 +21,26 @@
         SparklesIcon,
         RefreshCwIcon,
     } from "lucide-svelte";
-    import {
-        DEFAULT_KINDS,
-        addCustomKind,
-        countKinds,
-        getCustomKinds,
-        mergeCustomKinds,
-        removeCustomKind,
-        resetCustomKinds,
-    } from "#lib/kinds.ts";
+    import { DEFAULT_KINDS, isDefaultKind, kindKey } from "#lib/kinds.ts";
     import { recallVault, forgetVault } from "#lib/session.ts";
-    import { lock, listEntries, isVaultLockedError, type Entry } from "#lib/api.ts";
+    import {
+        lock,
+        queryEntries,
+        listCustomKinds,
+        addCustomKind,
+        removeCustomKind,
+        isVaultLockedError,
+        type KindCount,
+    } from "#lib/api.ts";
 
     let vaultName = $state<string | null>(null);
-    let entries = $state<Entry[]>([]);
-    let savedCustomKinds = $state<string[]>(getCustomKinds());
+    let savedCustomKinds = $state<string[]>([]);
+    let kindCounts = $state<KindCount[]>([]);
     let newKindInput = $state("");
     let inputError = $state("");
     let lockBusy = $state(false);
 
-    const customKinds = $derived(
-        mergeCustomKinds(savedCustomKinds, entries.map((entry) => entry.kind)),
-    );
-    const kindCounts = $derived(
-        countKinds(entries.map((entry) => entry.kind)),
-    );
+    const customKinds = $derived(savedCustomKinds);
     const usageByKind = $derived(
         new Map(kindCounts.map(({ kind, count }) => [kind.toLowerCase(), count])),
     );
@@ -59,13 +53,22 @@
         }
         vaultName = name;
         try {
-            entries = await listEntries();
+            const [kinds, res] = await Promise.all([
+                listCustomKinds(),
+                queryEntries({}),
+            ]);
+            savedCustomKinds = kinds;
+            kindCounts = res.kinds;
         } catch (err) {
             if (isVaultLockedError(err)) {
                 forgetVault();
                 void goto("/", { replace: true });
                 return;
             }
+            toast.show({
+                message: `Failed to load settings: ${err instanceof Error ? err.message : String(err)}`,
+                variant: "danger",
+            });
         }
     });
 
@@ -73,24 +76,41 @@
         return usageByKind.get(kindName.toLowerCase()) ?? 0;
     }
 
-    function handleAddKind(e?: SubmitEvent) {
+    async function handleAddKind(e?: SubmitEvent) {
         if (e) e.preventDefault();
         inputError = "";
         const trimmed = newKindInput.trim();
-        const res = addCustomKind(trimmed);
-        if (!res.success) {
-            inputError = res.error ?? "Failed to add kind";
+        if (!trimmed) return;
+        if (trimmed.length > 64) {
+            inputError = "Kind name cannot exceed 64 characters";
             return;
         }
-        toast.show({
-            message: `Added "${trimmed}" kind`,
-            variant: "success",
-        });
-        newKindInput = "";
-        savedCustomKinds = getCustomKinds();
+        if (isDefaultKind(trimmed)) {
+            inputError = `"${trimmed}" is already a built-in kind`;
+            return;
+        }
+        if (
+            savedCustomKinds.some(
+                (existing) => kindKey(existing) === kindKey(trimmed),
+            )
+        ) {
+            inputError = `"${trimmed}" already exists`;
+            return;
+        }
+        try {
+            await addCustomKind(trimmed);
+            toast.show({
+                message: `Added "${trimmed}" kind`,
+                variant: "success",
+            });
+            newKindInput = "";
+            savedCustomKinds = await listCustomKinds();
+        } catch (err) {
+            inputError = err instanceof Error ? err.message : String(err);
+        }
     }
 
-    function handleRemoveKind(k: string) {
+    async function handleRemoveKind(k: string) {
         const usageCount = kindUsage(k);
         if (usageCount > 0) {
             const entryText =
@@ -103,12 +123,19 @@
             return;
         }
 
-        removeCustomKind(k);
-        savedCustomKinds = getCustomKinds();
-        toast.show({ message: `Removed "${k}" kind`, variant: "info" });
+        try {
+            await removeCustomKind(k);
+            savedCustomKinds = await listCustomKinds();
+            toast.show({ message: `Removed "${k}" kind`, variant: "info" });
+        } catch (err) {
+            toast.show({
+                message: `Failed to remove kind: ${err instanceof Error ? err.message : String(err)}`,
+                variant: "danger",
+            });
+        }
     }
 
-    function handleResetKinds() {
+    async function handleResetKinds() {
         const inUse = customKinds.filter((k) => kindUsage(k) > 0);
         if (inUse.length > 0) {
             toast.show({
@@ -119,9 +146,18 @@
             return;
         }
 
-        resetCustomKinds();
-        savedCustomKinds = getCustomKinds();
-        toast.show({ message: "Reset to default kinds", variant: "info" });
+        try {
+            for (const k of savedCustomKinds) {
+                await removeCustomKind(k);
+            }
+            savedCustomKinds = await listCustomKinds();
+            toast.show({ message: "Reset to default kinds", variant: "info" });
+        } catch (err) {
+            toast.show({
+                message: `Failed to reset kinds: ${err instanceof Error ? err.message : String(err)}`,
+                variant: "danger",
+            });
+        }
     }
 
     async function handleLock() {
@@ -145,8 +181,6 @@
 <svelte:head>
     <title>Settings — PassHarbor</title>
 </svelte:head>
-
-<ToastManager />
 
 <div class="settings-page">
     <div class="settings-container">

@@ -35,13 +35,13 @@
   const MAX_KIND = 64;
   const MAX_NAME = 512;
 
-  import { getAllKinds } from "#lib/kinds.ts";
+  import { DEFAULT_KINDS, mergeKinds } from "#lib/kinds.ts";
   import { generatePassword } from "#lib/generator.ts";
 
   let kind = $state("login");
 
   const kindOptions = $derived<SelectOption[]>(
-    getAllKinds([...availableKinds, ...(kind ? [kind] : [])]).map((k) => ({
+    mergeKinds(DEFAULT_KINDS, availableKinds, kind ? [kind] : []).map((k) => ({
       label: k,
       value: k,
     })),
