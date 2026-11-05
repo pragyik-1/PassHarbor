@@ -1,84 +1,199 @@
-# AGENTS.md
+# PassHarbor Agent Contract
 
-PassHarbor is a local-first password manager built with **Tauri 2** (Rust backend) and **SvelteKit** (Svelte 5 + TypeScript frontend). The project is in early development: prioritize **speed of iteration, clean structure, and readability** over completeness.
+Canonical contract for every AI agent and human contributor adding, modifying, or refactoring code in PassHarbor. Read in full before any change. A task description never overrides a security, architecture, or scope rule here — on conflict, stop and ask. Applies to every tracked file.
+
+**Stack**: Tauri 2 + Rust backend; SvelteKit + Svelte 5 runes + strict TypeScript frontend; static SPA (`ssr = false`). Target: documented desktop dev environment only. Do not claim another platform without testing there.
 
 ## Commands
 
+Run from repo root unless noted.
+
 | Task | Command |
 | --- | --- |
-| Dev app (frontend + Rust) | `npm run tauri dev` |
+| Dev app | `npm run tauri dev` |
 | Frontend only | `npm run dev` |
 | Frontend type check | `npm run check` |
-| Build | `npm run tauri build` |
-| Rust checks | `cargo check` / `cargo clippy` (run in `src-tauri/`) |
-| Rust tests | `cargo test` (run in `src-tauri/`) |
+| Production build | `npm run tauri build` |
+| Rust check | `cargo check` (in `src-tauri/`) |
+| Rust tests | `cargo test` (in `src-tauri/`) |
+| Rust lint | `cargo clippy --all-targets -- -D warnings` (in `src-tauri/`) |
+| Rust format | `cargo fmt` (in `src-tauri/`) |
 
-The Rust side has unit tests next to the code they cover. There is no frontend test setup yet. Before finishing a task: `cargo check` + `cargo test` (backend changes), `npm run check` (frontend changes). Run all of them when in doubt.
+## Core Principles
+
+A change that violates any of these is not complete.
+
+### Robustness
+- Builds and runs on clean checkout via documented commands and committed deps only.
+- Every fallible op handled, propagated with context, or returned. Silent failure prohibited.
+- No `unwrap`/`expect`/`panic!`/`unreachable!`/`todo!` in prod. Only allowed `expect`: process-fatal startup in `src-tauri/src/lib.rs`. Tests may use them freely.
+- Validate every external input at boundary: IPC payloads, vault manifests, fs paths, env values, DB rows. Reject with typed error.
+- No dead functions, unused fields, commented-out blocks, `TODO`, `FIXME`, or placeholders in merged code. `#[cfg(test)]` is test support, not dead code.
+
+### Future-Proofing
+- Don't remove extension points later work needs; don't hardcode shortcuts to be torn out.
+- DB schema changes: append-only migrations. Never edit a shipped migration.
+- Vault manifests and IPC payloads are versioned contracts: add optional fields with `#[serde(default)]`; never rename/remove without explicit migration + approval.
+- Key-derivation chain is a compatibility contract. A change makes existing vaults unreadable → requires versioning + migration + approval.
+- No abstractions for hypothetical features. Usage exists before the abstraction.
+
+### Scalability & Modularity
+- One concern per module, minimal public interface. Prefer `pub(crate)` over `pub`.
+- Every module testable without Tauri, live UI, or hidden setup. Dependencies passed as arguments.
+- No module-level `static`, `lazy_static`, or global mutable state. App state only in `AppState`, reached via `AppState::resolve`.
+- Dependencies point inward: frontend → `src/lib/api.ts` → `frontend_api.rs` → domain → database. Lower layers never call up or import UI.
+- Composition over inheritance; compose functions and Svelte components, no class hierarchies.
+
+### Simplicity First
+- Smallest change fully satisfying the task + the principles above. Equal designs → fewer moving parts.
+- Every new line justifies existence; delete what doesn't.
+- stdlib and existing project utilities before new code. Reuse `src/lib/api.ts`, existing helpers, existing components.
+- New dependency requires prior approval + written justification: what it replaces, why existing code insufficient, maintenance/security cost.
+
+### Agent Behavior
+- Read this file before any change.
+- Don't invent requirements. Ambiguous requirement, API shape, or arch decision → stop and ask.
+- Run required tests and linters before declaring complete.
+- Don't modify out-of-scope files. Required fix out of scope → stop and report.
+- Prefer editing existing code over new files. No new directories, patterns, or config without approval.
+- Leave repo next-agent ready: no unexplained WIP, disabled checks, or temp files. Report changed, verified, uncertain.
+- Never revert or overwrite unrelated uncommitted work.
+
+## Code Standards
+
+### Naming & Structure
+- Rust: `snake_case` fns/vars/modules; `PascalCase` types/enum variants; `SCREAMING_SNAKE_CASE` consts; Tauri commands end `_cmd`.
+- TypeScript: `camelCase` values/fns; `PascalCase` interfaces/types/Svelte components; follow existing file names.
+- SQL: uppercase keywords, `snake_case` identifiers.
+- One concern per module. Linear readable functions. Extract only with a clear name and real duplication removed.
+- Comments explain non-obvious constraints or security decisions; never narrate change/task/author.
+
+### Error Handling
+- Internal Rust returns `Result<T>` from `crate::prelude`. New failure modes = new variants on `Error` in `src-tauri/src/error.rs`.
+- Add context at module and IPC boundaries. Never replace a specific error with a generic one; never lose the underlying cause.
+- Convert to `String` only at the IPC boundary (`IPCResult<T>`). No strings from internal modules.
+- Frontend catches every IPC rejection; surfaces via error state or toast; redirects to unlock when the error means vault is locked.
+- Error messages never contain passphrases, passwords, database keys, master keys, or plaintext entry content.
+
+### Logging
+- Backend: no `println!`/`dbg!`. `eprintln!` only for a deliberate non-fatal skipped condition with affected path + reason. Never log secret material or entry contents.
+- Frontend user-facing failures via component error state or existing toast API. `console.*` only for non-secret diagnostic detail; never log passphrase/password.
+- Logging never replaces returning an error. Failed op must fail visibly to caller.
+
+### Testing
+- Rust tests in `#[cfg(test)]` modules next to covered code.
+- Every new public behavior and error path needs a test: success case, rejection case, security invariant.
+- Tests deterministic and isolated: per-test temp dirs with `Drop` cleanup; never share mutable fixtures.
+- No order/wall-clock/home-dir dependence. Set time-sensitive values explicitly.
+- No frontend test runner. `npm run check` is minimum frontend verification. No test framework without approval; manually exercise UI via `npm run tauri dev`.
+- New IPC command → backend test for its logic + verify `src/lib/api.ts` wrapper matches command name and arg shape exactly.
+
+### Security & Secrets
+- Key material and passwords use `secrecy` types: `SecretBox<[u8; 32]>` in `MasterKey`/`DbKey`; `SecretString` for passphrases/passwords. Never store key bytes outside these types.
+- `ExposeSecret::expose_secret()` at point of use; shortest possible lifetime; never clone a secret unnecessarily.
+- A secret reaches the frontend only through an explicit `serialize_with` on the field. Never implement `Serialize` for a secret type globally.
+- Never log, print, format, commit, or fixture any real secret.
+- No custom cryptography. Use existing Argon2id + HKDF-SHA256 construction. Future encryption: vetted crate + unique nonces. If correct design isn't obvious, stop and ask.
+- SQL: bound parameters only. Only formatted SQL is the `PRAGMA key` hex literal — zeroized immediately after execution, first statement on a vault connection.
+- Vault ids validated with `validate_id` before path construction. Never join an unvalidated id, manifest value, or user string to a path.
+- Vault files/dirs owner-only (0600 files, 0700 dirs on Unix), written atomically: temp file, flush, rename, flush directory. Preserve in every new file-writing path.
+
+### Frontend
+- Svelte 5 runes (`$state`, `$derived`, `$effect`) + TypeScript strict. No SSR; `src/routes/+layout.ts` keeps `ssr = false`.
+- Backend only via typed wrappers in `src/lib/api.ts`. Never `invoke` from a route or component.
+- Tauri camelCases command args on the JS side: `entryId` for Rust `entry_id`. Payload fields keep Rust names (`created_at`, `current_password`). Mirror both exactly.
+- Shared TS types in `src/lib/api.ts` manually in sync with Rust types. Change both in the same task.
+- Component styles in that component's `<style>` block. Use existing `@hermitk/bluenite` components + design tokens before new UI.
+- No state-management library, CSS framework, or client-side router. Use SvelteKit routing and existing runes.
 
 ## Architecture
 
 ```
-src/                     SvelteKit frontend (SPA, ssr = false)
-  lib/api.ts             Typed wrappers around the IPC commands
-  routes/                Svelte routes; +layout.ts disables SSR for Tauri
+src/                         SvelteKit SPA (no SSR)
+  lib/api.ts                 Typed IPC wrappers; command names and payload types
+  lib/generator.ts           Client-side secure password generation
+  lib/kinds.ts               Built-in kinds and client-side kind helpers
+  lib/time.ts                Unix-second formatting helpers
+  lib/components/            Shared and dashboard Svelte components
+  routes/                    Unlock, dashboard, and settings pages
 src-tauri/src/
-  main.rs                Binary entry point; calls passharbor_lib::run()
-  lib.rs                 Tauri builder, command registration, state setup
-  frontend_api.rs        All #[tauri::command] functions — the only IPC surface
-  master_key.rs          MasterKey + KdfParams: Argon2id passphrase stretching,
-                         HKDF-SHA256 expansion
-  state.rs               AppState: the open session and the vault store
-  error.rs               Error enum
-  prelude.rs             Shared Result<T>/IPCResult<T> aliases, Error re-export
+  main.rs                    Binary entry point
+  lib.rs                     Tauri builder, state setup, command registration
+  frontend_api.rs            All #[tauri::command] functions; the only IPC surface
+  master_key.rs              MasterKey + KdfParams (Argon2id, HKDF-SHA256)
+  state.rs                   AppState (session + VaultStore)
+  error.rs                   Error enum
+  prelude.rs                 Result<T>, IPCResult<T>, Error re-export
   database/
-    mod.rs               Database: SQLCipher connection, entry queries, file helpers
-    key.rs               DbKey: the per-vault database key
-    schema.rs            Entry/Password types, migrations, input validation
-    vault_store.rs       VaultStore: manifests, vault selection, last-opened pointer
+    mod.rs                   Database, entry queries, file helpers
+    key.rs                   DbKey
+    schema.rs                Entry/Password types, migrations, validation
+    vault_store.rs           VaultStore, manifests, vault selection
 ```
 
-### Storage layout
+### Module Boundaries
+- **`frontend_api.rs`** — thin commands: resolve state → call domain → convert errors. New domain logic lives in its owning module, not in a command.
+- **`database/mod.rs`** — SQLCipher connection lifecycle + CRUD SQL. Nothing outside `database/` opens a connection or executes SQL.
+- **`database/schema.rs`** — table types, validation, migration SQL. No SQL in `frontend_api.rs` or the UI.
+- **`master_key.rs`** — passphrase stretching + key expansion. No key derivation elsewhere.
+- **`vault_store.rs`** — vault discovery + manifest persistence. No vault paths built in other modules.
+- **`state.rs`** — owns the open session. All commands reach it only via `AppState::resolve(&app)`. Never construct a second `AppState`.
 
-Each vault lives in `<app data>/vaults/` as a pair of files:
+### Dependency Direction & Interface Stability
+- Dependencies: UI → IPC → domain → storage. Lower module never imports `frontend_api`, a route, or a Svelte component.
+- IPC command names, arg names, and payload shapes are a public contract. Rename requires updating `frontend_api.rs` + `lib.rs` + `src/lib/api.ts` in the same change.
+- Frontend matches exact strings `"Vault is locked"` and `"Invalid master key"`. Don't change those `Error` display strings without updating frontend matching and tests.
+- `Error` variants may be added; existing variants may not be removed or reinterpreted without approval.
+- Schema migrations append-only. Version in `PRAGMA user_version`. DB newer than binary must be rejected, never downgraded.
+- Vault layout fixed: `<app data>/vaults/` contains `<id>.db`, plaintext `<id>.json` manifest, and `last_opened`. No scattering or second metadata store without approval.
 
-- `<id>.db` — the SQLCipher-encrypted database (`id` is 16 lowercase hex chars).
-- `<id>.json` — the plaintext manifest: `id`, `name`, `salt`, `kdf` (Argon2id
-  parameters), `created_at`. Manifests are not secret, but they are still
-  written owner-only.
+### Storage & Crypto Contract
+- Each vault = SQLCipher database + plaintext manifest with `id`, `name`, `salt`, `kdf`, `created_at`.
+- Chain: passphrase → Argon2id (`KdfParams`) → `MasterKey` → HKDF-SHA256 (`b"db key"`) → `DbKey` → `PRAGMA key`.
+- `PRAGMA key` must be the first statement on a vault connection.
+- `PRAGMA foreign_keys = ON` is required for password-history cascade deletion. Do not remove.
+- Missing database = error. Never recreate an empty database in place of a deleted or unreadable vault.
+- Wrong key → `Error::InvalidMasterKey`. Any other first-read failure → database error, not wrong passphrase.
+- Only `Database` holds an open connection. Closing the session = dropping `Database`. Don't keep a connection or key alive after lock.
 
-`<app data>/vaults/last_opened` records the id of the vault that was opened
-last. On unlock the app opens that vault; failing that the oldest vault by
-`created_at`; failing that a new vault is created with the passphrase that was
-entered.
+## Definition of Done
 
-The database is encrypted by SQLCipher alone — there is no second
-application-level cipher. The chain is: passphrase → Argon2id (`KdfParams`) →
-`MasterKey` → HKDF-SHA256 (`b"db key"`) → `DbKey` → `PRAGMA key`.
-`PRAGMA key` must be the first statement on a vault connection.
+Complete only when every item is true. State each verification result in the final response.
 
-### Backend conventions (follow these exactly)
+- [ ] Diff limited to task scope; unrelated uncommitted work untouched.
+- [ ] `cargo check` passes (in `src-tauri/`).
+- [ ] `cargo test` passes (in `src-tauri/`), including new tests for new behavior.
+- [ ] `cargo clippy --all-targets -- -D warnings` passes (in `src-tauri/`).
+- [ ] `cargo fmt` run; must not reformat files outside the task — report pre-existing formatting issues instead of changing them.
+- [ ] `npm run check` passes with zero errors and zero warnings.
+- [ ] UI changes exercised via `npm run tauri dev`.
+- [ ] No secret in code, logs, errors, tests, or fixtures.
+- [ ] No dead code, commented-out block, `TODO`, or placeholder.
+- [ ] No new dependency, directory, global state, or architecture pattern without approval + written justification.
+- [ ] Public IPC commands, TypeScript wrappers, and payload types in sync.
+- [ ] Final response names files changed, commands run, their results, and any remaining risk/follow-up.
 
-- **Module boundaries**: each concern lives in one module with a minimal `pub` interface. Modules communicate only through explicit function/struct interfaces — no hidden global state. Shared state goes in `AppState` (defined in `state.rs`) and is accessed exclusively via `AppState::resolve(&app)`.
-- **State**: `AppState` holds the open session as `Mutex<Option<Database>>` — `None` means the vault is locked — plus the `VaultStore`. Do not add module-level `static`/`lazy_static` state.
-- **Commands**: declared in `frontend_api.rs`, registered in `lib.rs` via `tauri::generate_handler![]`. Commands take `app: tauri::AppHandle` when they need state, are marked `#[tauri::command(async)]` so they never block the UI thread, and return `IPCResult<T>` (errors as `String`). Failures are returned to the caller, not emitted as events.
-- **Errors**: internal code returns `Result<T>` (`prelude` alias over `error::Error`). Convert to strings only at the IPC boundary. Add new failure modes as variants on `Error` in `error.rs`.
-- **Secrets**: key material and passwords live in `secrecy` types — `SecretBox<[u8; 32]>` inside `MasterKey`/`DbKey`, `SecretString` for passphrases and passwords. These redact themselves in `Debug`/`Display` and wipe themselves on drop, so a secret can never be printed by accident. Access the value through `ExposeSecret::expose_secret()` and keep that call close to the use. `secrecy` deliberately refuses to serialize a secret: a field that has to reach the frontend needs an explicit `serialize_with` that exposes it. Derived keys come from `MasterKey::derive_with_salt` using HKDF-SHA256 with a distinct `info` label per key (currently `b"db key"`). Never log, clone unnecessarily, or store key bytes outside these types.
-- **Files**: vault files are created owner-only (`0700` directories, `0600` files) and written atomically — write to a temp file, fsync it, rename it into place, fsync the directory.
-- **Imports**: modules use `use crate::prelude::*;` for `Error`/`Result`, plus explicit imports for everything else. Note that the `Result` alias shadows `std::result::Result`: spell out `std::result::Result` where two type parameters are needed.
-- Edition 2024; crypto crates already available: `hkdf`, `sha2`, `argon2`, `zeroize`, `secrecy`, `rusqlite` (SQLCipher), `serde`, `thiserror`.
+## Prohibited Practices
 
-### Frontend conventions
+Agents must never:
 
-- Svelte 5 runes (`$state`, `$derived`, `$effect`); TypeScript; no SSR (`+layout.ts` sets `ssr = false`).
-- Talk to the backend only through the typed wrappers in `src/lib/api.ts`, which call `invoke("command_name", {...})` from `@tauri-apps/api/core`. Mirror command names and arg shapes exactly; keep any shared types in sync manually for now.
-- Command arguments are camelCase on the JavaScript side (Tauri converts Rust's `snake_case`): `entry_id` is passed as `entryId`. Command *payloads* keep their Rust field names (`created_at`, `current_password`, ...).
-- Component styles are colocated in `<style>` blocks.
-
-## Working rules
-
-- **Simplest solution first**: the minimal change that fully solves the problem. No speculative abstraction, no extra layers, no premature config. Prefer linear, readable code over clever code.
-- **No hidden bugs**: crypto/security code must be obviously correct — correct nonces, no key duplication, explicit error handling. If a simple approach would compromise correctness or security, stop and ask.
-- **Dead code is acceptable right now**; don't spend time removing it unless it blocks the task.
-- **Match existing style**: naming, formatting, module layout, and the conventions above take precedence over personal preference. Do not introduce new dependencies, patterns, or directory structures without asking.
-- **Ask, don't assume**: before making any non-obvious decision — new dependency, architecture change, ambiguous requirement, conflicting instructions — ask the user. Surface confusion early rather than guessing.
-- **Include no conversational context in generated code**: the generated code must not inlucde context from the user and model such as " // The changed F() function with the features you asked" and such.
+- Run, edit, or delete anything outside task scope.
+- Revert, overwrite, or reformat unrelated uncommitted work.
+- Invent requirements or silently choose between conflicting instructions.
+- Add a dependency, framework, directory, or abstraction without approval.
+- Add module-level global state, a second `AppState`, or a new DB connection owner.
+- Use `unwrap`/`expect`/`panic!`/`unreachable!`/`todo!` in prod (only allowed exception: startup `expect` above).
+- Swallow errors with `let _ =`, empty `catch` blocks, or a fallback that hides data loss.
+- Report a failure only to a log while returning success.
+- Store, log, print, format, commit, or fixture any real secret or key material.
+- Implement custom cryptography, weaken KDF parameters, or bypass SQLCipher.
+- Interpolate user input into SQL, or build a filesystem path from an unvalidated id or manifest value.
+- Recreate a missing vault, overwrite an existing database, or open a DB with a fallback key.
+- Edit a shipped migration, rename persisted fields, or change the key-derivation chain without explicit migration + approval.
+- Call `invoke` outside `src/lib/api.ts`, add SSR, or duplicate IPC types in routes/components.
+- Use `any`, `@ts-ignore`, or disable TS strict checks without approval.
+- Add `console.log` for user-facing failures, `dbg!`, or debug output in merged code.
+- Leave `TODO`, `FIXME`, commented-out code, or disabled tests/linters.
+- Write comments describing the task, prompt, or change history.
+- Claim completion without running the Definition of Done checks.
+- Rewrite git history or discard uncommitted changes.
