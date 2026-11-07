@@ -267,6 +267,18 @@ pub fn validate_password(password: &str) -> Result<()> {
     Ok(())
 }
 
+/// Trim an optional string, normalizing blank or whitespace-only strings to `None`.
+pub fn clean_optional_text(val: Option<String>) -> Option<String> {
+    val.and_then(|s| {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
 /// Bring the database up to the latest schema version.
 pub fn migrate(conn: &Connection) -> Result<()> {
     let version: u32 = conn
@@ -416,5 +428,16 @@ mod tests {
             entry.validate(),
             Err(Error::InvalidEntry(message)) if message.contains("password")
         ));
+    }
+
+    #[test]
+    fn clean_optional_text_normalizes_whitespace_to_none() {
+        assert_eq!(clean_optional_text(None), None);
+        assert_eq!(clean_optional_text(Some("".to_string())), None);
+        assert_eq!(clean_optional_text(Some("   \t\n  ".to_string())), None);
+        assert_eq!(
+            clean_optional_text(Some("  user@example.com  ".to_string())),
+            Some("user@example.com".to_string())
+        );
     }
 }

@@ -118,6 +118,10 @@ impl Database {
         new.validate()?;
         let kind = new.kind.trim();
         let name = new.name.trim();
+        let username = schema::clean_optional_text(new.username);
+        let email = schema::clean_optional_text(new.email);
+        let url = schema::clean_optional_text(new.url);
+        let note = schema::clean_optional_text(new.note);
         let tx = self
             .conn
             .unchecked_transaction()
@@ -125,7 +129,7 @@ impl Database {
         tx.execute(
             "INSERT INTO entries (kind, name, username, email, url, note)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![kind, name, new.username, new.email, new.url, new.note],
+            params![kind, name, username, email, url, note],
         )
         .map_err(|e| Error::Database(format!("Failed to insert entry: {e}")))?;
         let id = tx.last_insert_rowid();
@@ -283,6 +287,10 @@ impl Database {
         update.validate()?;
         let kind = update.kind.trim();
         let name = update.name.trim();
+        let username = schema::clean_optional_text(update.username);
+        let email = schema::clean_optional_text(update.email);
+        let url = schema::clean_optional_text(update.url);
+        let note = schema::clean_optional_text(update.note);
         let changed = self
             .conn
             .execute(
@@ -290,15 +298,7 @@ impl Database {
                  SET kind = ?1, name = ?2, username = ?3, email = ?4, url = ?5, note = ?6,
                      updated_at = unixepoch()
                  WHERE id = ?7",
-                params![
-                    kind,
-                    name,
-                    update.username,
-                    update.email,
-                    update.url,
-                    update.note,
-                    id
-                ],
+                params![kind, name, username, email, url, note, id],
             )
             .map_err(|e| Error::Database(format!("Failed to update entry: {e}")))?;
         if changed == 0 {
@@ -1096,6 +1096,46 @@ mod tests {
         // Now reset succeeds
         db.reset_custom_kinds().expect("reset succeeds");
         assert!(db.list_custom_kinds().expect("list").is_empty());
+    }
+
+    #[test]
+    fn add_and_update_entry_cleans_blank_optional_fields() {
+        let dir = TempDir::new();
+        let path = dir.path().join("vault.db");
+        let db = Database::create(&path, &key_a()).expect("create database");
+
+        let new = NewEntry {
+            kind: "Login".to_string(),
+            name: "test.com".to_string(),
+            username: Some("   ".to_string()),
+            email: Some("".to_string()),
+            url: Some("  https://test.com  ".to_string()),
+            note: Some("  \n  ".to_string()),
+            password: None,
+        };
+        let id = db.add_entry(new).expect("add entry");
+
+        let detail = db.get_entry(id).expect("get entry");
+        assert_eq!(detail.entry.username, None);
+        assert_eq!(detail.entry.email, None);
+        assert_eq!(detail.entry.url, Some("https://test.com".to_string()));
+        assert_eq!(detail.entry.note, None);
+
+        let update = UpdateEntry {
+            kind: "Login".to_string(),
+            name: "test.com".to_string(),
+            username: Some("alice".to_string()),
+            email: Some("   ".to_string()),
+            url: None,
+            note: Some("valid note".to_string()),
+        };
+        db.update_entry(id, update).expect("update entry");
+
+        let detail2 = db.get_entry(id).expect("get entry 2");
+        assert_eq!(detail2.entry.username, Some("alice".to_string()));
+        assert_eq!(detail2.entry.email, None);
+        assert_eq!(detail2.entry.url, None);
+        assert_eq!(detail2.entry.note, Some("valid note".to_string()));
     }
 
     #[cfg(unix)]
