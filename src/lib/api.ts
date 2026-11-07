@@ -165,3 +165,8 @@ export function isInvalidMasterKeyError(error: unknown): boolean {
 export function isEntryNotFoundError(error: unknown): boolean {
   return String(error).includes("not found");
 }
+
+/** Whether an IPC failure indicates rate-limit lockout due to too many failed unlock attempts. */
+export function isTooManyAttemptsError(error: unknown): boolean {
+  return String(error).includes("Too many failed attempts");
+}

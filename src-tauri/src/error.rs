@@ -18,6 +18,8 @@ pub enum Error {
     WeakPassphrase(usize),
     #[error("Invalid entry: {0}")]
     InvalidEntry(String),
+    #[error("Too many failed attempts. Please try again after {0} seconds")]
+    TooManyAttempts(u64),
 }
 
 impl Error {

@@ -21,6 +21,7 @@ const DEFAULT_VAULT_NAME: &str = "Main";
 #[tauri::command(async)]
 pub fn unlock_cmd(app: tauri::AppHandle, passphrase: SecretString) -> IPCResult<SessionInfo> {
     let app_state = AppState::resolve(&app);
+    app_state.check_lockout()?;
 
     {
         let mut session = app_state.session();
@@ -28,7 +29,20 @@ pub fn unlock_cmd(app: tauri::AppHandle, passphrase: SecretString) -> IPCResult<
     }
 
     let store = app_state.vault_store();
-    let (database, manifest) = open_vault(store, &passphrase)?;
+    let (database, manifest) = match open_vault(store, &passphrase) {
+        Ok(res) => {
+            app_state.record_unlock_success();
+            res
+        }
+        Err(err) => {
+            if matches!(err, Error::InvalidMasterKey)
+                && let Some(delay) = app_state.record_unlock_failure()
+            {
+                return Err(Error::TooManyAttempts(delay).into());
+            }
+            return Err(err.into());
+        }
+    };
     store.set_last_opened(&manifest.id)?;
 
     let info = SessionInfo {

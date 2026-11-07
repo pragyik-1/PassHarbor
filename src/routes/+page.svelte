@@ -2,7 +2,12 @@
   import { onMount, onDestroy } from "svelte";
   import { goto } from "$app/navigation";
   import { Button, Card, Input } from "@hermitk/bluenite";
-  import { unlock, getSession, isInvalidMasterKeyError } from "#lib/api.ts";
+  import {
+    unlock,
+    getSession,
+    isInvalidMasterKeyError,
+    isTooManyAttemptsError,
+  } from "#lib/api.ts";
   import {
     EyeIcon,
     EyeOffIcon,
@@ -13,18 +18,6 @@
   import BrandMark from "#lib/components/BrandMark.svelte";
   import ThemeToggle from "#lib/components/ThemeToggle.svelte";
 
-  const STORAGE_ATTEMPTS_KEY = "ph_unlock_attempts";
-  const STORAGE_DELAY_KEY = "ph_unlock_delay_ms";
-  const THROTTLE_THRESHOLD = 5;
-  const INITIAL_DELAY_MS = 30_000;
-
-  function readStoredInt(key: string, fallback: number): number {
-    const raw = sessionStorage.getItem(key);
-    if (raw === null) return fallback;
-    const n = parseInt(raw, 10);
-    return Number.isFinite(n) ? n : fallback;
-  }
-
   let passphrase = $state("");
   let error = $state("");
   let busy = $state(false);
@@ -32,42 +25,27 @@
   let capsLock = $state(false);
   let passphraseInput = $state<HTMLInputElement | null>(null);
 
-  // Persisted across in-session navigation so reloading the page does not reset
-  // the throttle. Both values are cleared when the webview session ends.
-  let unlockAttempts = $state(readStoredInt(STORAGE_ATTEMPTS_KEY, 0));
-  let requiredTimeBeforeUnlock = $state(
-    readStoredInt(STORAGE_DELAY_KEY, INITIAL_DELAY_MS),
-  );
+  let lockoutRemaining = $state(0);
+  let lockoutInterval: ReturnType<typeof setInterval> | null = null;
+  const isLockedOut = $derived(lockoutRemaining > 0);
 
-  let lockoutTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const isLockedOut = $derived(unlockAttempts >= THROTTLE_THRESHOLD);
-
-  function startLockoutTimer() {
-    if (lockoutTimer !== null) clearTimeout(lockoutTimer);
-    lockoutTimer = setTimeout(() => {
-      lockoutTimer = null;
-      unlockAttempts = 0;
-      requiredTimeBeforeUnlock *= 2;
-      sessionStorage.setItem(STORAGE_ATTEMPTS_KEY, "0");
-      sessionStorage.setItem(
-        STORAGE_DELAY_KEY,
-        String(requiredTimeBeforeUnlock),
-      );
-      error = "";
-    }, requiredTimeBeforeUnlock);
+  function startLockoutCountdown(seconds: number) {
+    if (lockoutInterval !== null) clearInterval(lockoutInterval);
+    lockoutRemaining = seconds;
+    lockoutInterval = setInterval(() => {
+      lockoutRemaining--;
+      if (lockoutRemaining <= 0) {
+        if (lockoutInterval !== null) clearInterval(lockoutInterval);
+        lockoutInterval = null;
+        lockoutRemaining = 0;
+        error = "";
+      } else {
+        error = `Too many failed attempts. Please try again after ${lockoutRemaining} seconds`;
+      }
+    }, 1000);
   }
 
   onMount(async () => {
-    // Restore an active lockout: the timer was lost when the page reloaded, so
-    // show the message and restart it from however long is left. Without a
-    // stored start-time this is approximate — the full delay restarts, which is
-    // conservative (safer than allowing a login too early).
-    if (isLockedOut) {
-      error = `Too many failed attempts. Please try again after ${requiredTimeBeforeUnlock / 1000} seconds.`;
-      startLockoutTimer();
-    }
-
     try {
       const session = await getSession();
       if (session.unlocked) {
@@ -81,7 +59,7 @@
   });
 
   onDestroy(() => {
-    if (lockoutTimer !== null) clearTimeout(lockoutTimer);
+    if (lockoutInterval !== null) clearInterval(lockoutInterval);
   });
 
   function describeError(cause: unknown): string {
@@ -113,20 +91,14 @@
     try {
       await unlock(passphrase);
       passphrase = "";
-      sessionStorage.removeItem(STORAGE_ATTEMPTS_KEY);
-      sessionStorage.removeItem(STORAGE_DELAY_KEY);
       await goto("/dashboard", { replace: true });
     } catch (cause) {
-      unlockAttempts++;
-      sessionStorage.setItem(STORAGE_ATTEMPTS_KEY, String(unlockAttempts));
-      sessionStorage.setItem(STORAGE_DELAY_KEY, String(requiredTimeBeforeUnlock));
-
-      if (unlockAttempts >= THROTTLE_THRESHOLD) {
-        error = `Too many failed attempts. Please try again after ${requiredTimeBeforeUnlock / 1000} seconds.`;
-        startLockoutTimer();
-      } else {
-        error = describeError(cause);
-        passphraseInput?.focus();
+      error = describeError(cause);
+      passphraseInput?.focus();
+      if (isTooManyAttemptsError(cause)) {
+        const match = String(cause).match(/(\d+)\s+seconds/);
+        const secs = match ? parseInt(match[1], 10) : 30;
+        startLockoutCountdown(secs);
       }
     } finally {
       busy = false;
