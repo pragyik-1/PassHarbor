@@ -407,14 +407,65 @@ impl Database {
     }
 
     /// Remove a custom kind from the vault database.
+    /// Fails if any vault entry is currently using this kind.
     pub fn remove_custom_kind(&self, kind: &str) -> Result<()> {
         let trimmed = kind.trim();
+        let in_use_count: i64 = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM entries WHERE kind = ?1 COLLATE NOCASE",
+                params![trimmed],
+                |row| row.get(0),
+            )
+            .map_err(|e| Error::Database(format!("Failed to check custom kind usage: {e}")))?;
+
+        if in_use_count > 0 {
+            let entry_word = if in_use_count == 1 {
+                "entry is"
+            } else {
+                "entries are"
+            };
+            return Err(Error::InvalidEntry(format!(
+                "Cannot remove \"{trimmed}\": {in_use_count} {entry_word} currently using this kind"
+            )));
+        }
+
         self.conn
             .execute(
                 "DELETE FROM custom_kinds WHERE name = ?1 COLLATE NOCASE",
                 params![trimmed],
             )
             .map_err(|e| Error::Database(format!("Failed to remove custom kind: {e}")))?;
+        Ok(())
+    }
+
+    /// Remove all custom kinds that are not in use by entries.
+    /// If any custom kind is currently in use, none are deleted and an error is returned.
+    pub fn reset_custom_kinds(&self) -> Result<()> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT c.name FROM custom_kinds c
+                 WHERE EXISTS (SELECT 1 FROM entries e WHERE e.kind = c.name COLLATE NOCASE)
+                 ORDER BY c.name COLLATE NOCASE",
+            )
+            .map_err(|e| Error::Database(format!("Failed to check in-use custom kinds: {e}")))?;
+        let in_use = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| Error::Database(format!("Failed to query in-use custom kinds: {e}")))?
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|e| Error::Database(format!("Failed to read in-use custom kind: {e}")))?;
+
+        if !in_use.is_empty() {
+            return Err(Error::InvalidEntry(format!(
+                "Cannot reset kinds: in use by vault entries ({})",
+                in_use.join(", ")
+            )));
+        }
+
+        self.conn
+            .execute("DELETE FROM custom_kinds", [])
+            .map_err(|e| Error::Database(format!("Failed to reset custom kinds: {e}")))?;
         Ok(())
     }
 
@@ -998,6 +1049,52 @@ mod tests {
 
         db.remove_custom_kind("SERVER")
             .expect("remove case insensitive");
+        assert!(db.list_custom_kinds().expect("list").is_empty());
+    }
+
+    #[test]
+    fn removing_in_use_custom_kind_is_rejected() {
+        let dir = TempDir::new();
+        let path = dir.path().join("vault.db");
+        let db = Database::create(&path, &key_a()).expect("create database");
+
+        db.add_custom_kind("Server").expect("add kind");
+        let mut entry = new_entry("web01");
+        entry.kind = "Server".to_string();
+        db.add_entry(entry).expect("add entry with Server kind");
+
+        let err = db.remove_custom_kind("Server").expect_err("should reject");
+        assert!(
+            matches!(err, Error::InvalidEntry(msg) if msg.contains("currently using this kind"))
+        );
+
+        // Still present in custom kinds
+        assert_eq!(db.list_custom_kinds().expect("list"), vec!["Server"]);
+    }
+
+    #[test]
+    fn reset_custom_kinds_deletes_only_when_not_in_use() {
+        let dir = TempDir::new();
+        let path = dir.path().join("vault.db");
+        let db = Database::create(&path, &key_a()).expect("create database");
+
+        db.add_custom_kind("Server").expect("add kind 1");
+        db.add_custom_kind("API Key").expect("add kind 2");
+
+        let mut entry = new_entry("prod-key");
+        entry.kind = "API Key".to_string();
+        db.add_entry(entry).expect("add entry");
+
+        // Fails because "API Key" is in use
+        let err = db.reset_custom_kinds().expect_err("should reject reset");
+        assert!(matches!(err, Error::InvalidEntry(msg) if msg.contains("API Key")));
+
+        // Delete the entry using API Key
+        let entries = db.list_entries().expect("list");
+        db.delete_entry(entries[0].id).expect("delete entry");
+
+        // Now reset succeeds
+        db.reset_custom_kinds().expect("reset succeeds");
         assert!(db.list_custom_kinds().expect("list").is_empty());
     }
 

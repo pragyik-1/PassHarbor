@@ -28,6 +28,7 @@ pub fn run() {
             frontend_api::set_password_cmd,
             frontend_api::add_custom_kind_cmd,
             frontend_api::remove_custom_kind_cmd,
+            frontend_api::reset_custom_kinds_cmd,
             frontend_api::list_custom_kinds_cmd
         ])
         .run(tauri::generate_context!())

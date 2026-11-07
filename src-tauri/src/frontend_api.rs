@@ -180,6 +180,15 @@ pub fn remove_custom_kind_cmd(app: tauri::AppHandle, kind: String) -> IPCResult<
 }
 
 #[tauri::command(async)]
+pub fn reset_custom_kinds_cmd(app: tauri::AppHandle) -> IPCResult<()> {
+    let app_state = AppState::resolve(&app);
+    let session = app_state.session();
+    let active = session.as_ref().ok_or(Error::VaultLocked)?;
+    active.db.reset_custom_kinds()?;
+    Ok(())
+}
+
+#[tauri::command(async)]
 pub fn list_custom_kinds_cmd(app: tauri::AppHandle) -> IPCResult<Vec<String>> {
     let app_state = AppState::resolve(&app);
     let session = app_state.session();

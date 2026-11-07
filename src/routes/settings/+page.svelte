@@ -29,6 +29,7 @@
         listCustomKinds,
         addCustomKind,
         removeCustomKind,
+        resetCustomKinds,
         isVaultLockedError,
         type KindCount,
     } from "#lib/api.ts";
@@ -146,9 +147,7 @@
         }
 
         try {
-            for (const k of savedCustomKinds) {
-                await removeCustomKind(k);
-            }
+            await resetCustomKinds();
             savedCustomKinds = await listCustomKinds();
             toast.show({ message: "Reset to default kinds", variant: "info" });
         } catch (err) {

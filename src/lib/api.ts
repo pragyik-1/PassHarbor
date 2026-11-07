@@ -143,6 +143,10 @@ export async function removeCustomKind(kind: string): Promise<void> {
   await invoke<void>("remove_custom_kind_cmd", { kind });
 }
 
+export async function resetCustomKinds(): Promise<void> {
+  await invoke<void>("reset_custom_kinds_cmd");
+}
+
 export async function listCustomKinds(): Promise<string[]> {
   return await invoke<string[]>("list_custom_kinds_cmd");
 }
