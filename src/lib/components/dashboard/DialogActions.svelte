@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from '@hermitk/bluenite'
+  import { Button, Row } from '@hermitk/bluenite'
 
   interface Props {
     confirmLabel: string
@@ -20,7 +20,7 @@
   }: Props = $props()
 </script>
 
-<div class="actions">
+<Row justify="end" gap={0.5}>
   <Button variant="ghost" color="secondary" size="sm" disabled={busy} onclick={oncancel}>
     Cancel
   </Button>
@@ -35,12 +35,4 @@
   >
     {confirmLabel}
   </Button>
-</div>
-
-<style>
-  .actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-  }
-</style>
+</Row>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Modal, Button, Input, Switch, toast } from '@hermitk/bluenite'
+  import { Modal, Button, Input, Switch, Badge, Card, Row, toast } from '@hermitk/bluenite'
   import {
     CopyIcon,
     CheckIcon,
@@ -144,7 +144,7 @@
 <Modal bind:open size="md" title="Password generator" onClose={handleClose}>
   <div class="modal-body">
     <!-- Prominent Password Display Box -->
-    <div class="display-card">
+    <Card class="display-card" noPadding>
       <div class="pw-box">
         <span class="pw-text" class:empty={!currentPassword}>
           {currentPassword || 'Select at least one character type'}
@@ -205,13 +205,13 @@
           {genOpts.length} characters · {entropyBits} bits entropy
         </span>
       </div>
-    </div>
+    </Card>
 
     <!-- Length Controls -->
     <section class="section">
       <div class="section-head">
         <label for="length-slider" class="section-title">Password length</label>
-        <span class="length-badge">{genOpts.length}</span>
+        <Badge variant="primary" size="sm">{genOpts.length}</Badge>
       </div>
 
       <div class="slider-row">
@@ -398,7 +398,7 @@
   </div>
 
   {#snippet footer()}
-    <div class="modal-footer">
+    <Row justify="end" gap={0.5} style="width: 100%">
       <Button variant="ghost" color="secondary" size="sm" onclick={handleClose}>Close</Button>
 
       <Button size="sm" disabled={!currentPassword} onclick={copyPassword}>
@@ -411,7 +411,7 @@
         {/snippet}
         {copied ? 'Copied!' : 'Copy password'}
       </Button>
-    </div>
+    </Row>
   {/snippet}
 </Modal>
 
@@ -425,11 +425,8 @@
 
   /* ── Password Display Card ──────────────────────────────── */
 
-  .display-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--round-lg);
-    padding: 1rem;
+  :global(.display-card) {
+    padding: 1rem !important;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
@@ -535,16 +532,6 @@
     font-size: 0.8125rem;
     font-weight: 600;
     color: var(--text);
-  }
-
-  .length-badge {
-    font-family: ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
-    font-size: 0.8125rem;
-    font-weight: 700;
-    color: var(--primary);
-    background: color-mix(in srgb, var(--primary) 10%, transparent);
-    padding: 0.1rem 0.45rem;
-    border-radius: var(--round-sm);
   }
 
   /* Slider */
@@ -746,14 +733,5 @@
   .num-input:disabled {
     opacity: 0.4;
     cursor: not-allowed;
-  }
-
-  /* Footer */
-  .modal-footer {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    width: 100%;
   }
 </style>

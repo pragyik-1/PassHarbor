@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  import { Button } from '@hermitk/bluenite'
+  import { Badge, Button } from '@hermitk/bluenite'
   import {
     ShieldIcon,
     LockIcon,
@@ -54,7 +54,7 @@
 
     <!-- Vault name -->
     <div class="vault-label" title={vaultName}>
-      <span class="vault-tag">Vault</span>
+      <Badge variant="primary" size="sm">Vault</Badge>
       <span class="vault-name">{vaultName}</span>
     </div>
 
@@ -142,11 +142,6 @@
           <span class="lock-label">Lock vault</span>
         </Button>
       </div>
-
-      <p class="encryption-note">
-        <ShieldIcon size={10} aria-hidden="true" />
-        Encrypted locally with SQLCipher. Nothing leaves this device.
-      </p>
     </footer>
   </aside>
 
@@ -202,15 +197,6 @@
     background: color-mix(in srgb, var(--primary) 7%, transparent);
     border: 1px solid color-mix(in srgb, var(--primary) 15%, transparent);
     overflow: hidden;
-  }
-
-  .vault-tag {
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--primary);
-    flex-shrink: 0;
   }
 
   .vault-name {
@@ -379,16 +365,6 @@
     font-size: 0.8rem;
   }
 
-  .encryption-note {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    margin: 0;
-    font-size: 0.65rem;
-    color: var(--muted-text);
-    line-height: 1.4;
-  }
-
   .main {
     display: flex;
     flex-direction: column;
@@ -412,7 +388,6 @@
     .nav-label,
     .lock-label,
     .settings-label,
-    .encryption-note,
     .lock-error {
       display: none;
     }
@@ -494,8 +469,7 @@
 
     .sidebar-nav,
     .nav-section-label,
-    .kinds-label,
-    .encryption-note {
+    .kinds-label {
       display: none;
     }
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
-  import { ToastManager, toast, Button } from '@hermitk/bluenite'
+  import { toast, Button } from '@hermitk/bluenite'
   import { ArrowLeftIcon } from 'lucide-svelte'
   import {
     queryEntries,

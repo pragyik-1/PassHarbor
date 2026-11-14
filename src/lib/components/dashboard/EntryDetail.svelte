@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
-  import { Button } from '@hermitk/bluenite'
+  import { Badge, Button } from '@hermitk/bluenite'
   import {
     UserIcon,
     MailIcon,
@@ -108,7 +108,7 @@
     <!-- Header -->
     <header class="detail-header">
       <div class="header-left">
-        <span class="kind-badge">{detail.entry.kind}</span>
+        <Badge variant="primary" size="sm">{detail.entry.kind}</Badge>
         <h2 class="entry-name">{detail.entry.name}</h2>
         <p class="updated-at">
           <ClockIcon size={12} aria-hidden="true" />
@@ -379,19 +379,6 @@
   .header-left {
     min-width: 0;
     flex: 1;
-  }
-
-  .kind-badge {
-    display: inline-block;
-    padding: 0.15rem 0.5rem;
-    border-radius: var(--round-sm);
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    background: color-mix(in srgb, var(--primary) 12%, transparent);
-    color: var(--primary);
-    margin-bottom: 0.35rem;
   }
 
   .entry-name {

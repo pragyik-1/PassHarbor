@@ -1,15 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
-  import { Button, Input, Card, toast, theme, toggleTheme } from '@hermitk/bluenite'
+  import { Badge, Button, Input, Card, Switch, toast, theme, toggleTheme } from '@hermitk/bluenite'
   import {
     ArrowLeftIcon,
     PlusIcon,
     TrashIcon,
     ShieldIcon,
     LockIcon,
-    SunIcon,
-    MoonIcon,
     TagIcon,
     SparklesIcon,
     RefreshCwIcon,
@@ -64,6 +62,13 @@
 
   function kindUsage(kindName: string): number {
     return usageByKind.get(kindName.toLowerCase()) ?? 0
+  }
+
+  function kindInUseText(kindName: string): string {
+    const count = kindUsage(kindName)
+    return count > 0
+      ? `In use by ${count} ${count === 1 ? 'entry' : 'entries'}. Change or delete the ${count === 1 ? 'entry' : 'entries'} first to remove`
+      : `Remove ${count}`
   }
 
   async function handleAddKind(e?: SubmitEvent) {
@@ -231,14 +236,15 @@
                   {@const usage = kindUsage(kind)}
                   <div class="kind-tag builtin">
                     <span class="tag-name">{kind}</span>
-                    <span class="tag-badge">built-in</span>
+                    <Badge variant="neutral" size="sm">built-in</Badge>
                     {#if usage > 0}
-                      <span
-                        class="usage-badge builtin-usage"
+                      <Badge
+                        variant="neutral"
+                        size="sm"
                         title="{usage} {usage === 1 ? 'entry' : 'entries'} in use"
                       >
                         {usage} in use
-                      </span>
+                      </Badge>
                     {/if}
                   </div>
                 {/each}
@@ -277,12 +283,13 @@
                     <div class="kind-tag custom" class:in-use={usage > 0}>
                       <span class="tag-name">{kind}</span>
                       {#if usage > 0}
-                        <span
-                          class="usage-badge"
+                        <Badge
+                          variant="primary"
+                          size="sm"
                           title="{usage} {usage === 1 ? 'entry' : 'entries'} in use"
                         >
                           {usage} in use
-                        </span>
+                        </Badge>
                       {/if}
                       <button
                         type="button"
@@ -291,9 +298,7 @@
                         aria-label={usage > 0
                           ? `Cannot remove ${kind} (${usage} in use)`
                           : `Remove ${kind} kind`}
-                        title={usage > 0
-                          ? `In use by ${usage} ${usage === 1 ? 'entry' : 'entries'} — change or delete them first to remove`
-                          : `Remove ${kind}`}
+                        title={kindInUseText(kind)}
                         onclick={() => handleRemoveKind(kind)}
                       >
                         <TrashIcon size={12} />
@@ -322,21 +327,16 @@
         <Card class="settings-card">
           <div class="setting-row">
             <div>
-              <div class="setting-label">Theme</div>
+              <div class="setting-label">Dark theme</div>
               <div class="setting-sub">
-                Currently using {theme.value === 'dark' ? 'Dark mode' : 'Light mode'}
+                {theme.value === 'dark' ? 'Dark theme is active' : 'Light theme is active'}
               </div>
             </div>
-            <Button variant="outline" color="secondary" size="sm" onclick={toggleTheme}>
-              {#snippet icon()}
-                {#if theme.value === 'dark'}
-                  <SunIcon size={16} />
-                {:else}
-                  <MoonIcon size={16} />
-                {/if}
-              {/snippet}
-              Switch to {theme.value === 'dark' ? 'Light' : 'Dark'}
-            </Button>
+            <Switch
+              checked={theme.value === 'dark'}
+              onchange={toggleTheme}
+              aria-label="Toggle dark theme"
+            />
           </div>
         </Card>
       </section>
@@ -548,31 +548,6 @@
   .tag-name {
     font-family: ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
     font-size: 0.8rem;
-  }
-
-  .tag-badge {
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 0.05rem 0.3rem;
-    border-radius: var(--round-sm);
-    background: color-mix(in srgb, var(--text) 8%, transparent);
-    color: var(--muted-text);
-  }
-
-  .usage-badge {
-    font-size: 0.65rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    padding: 0.05rem 0.35rem;
-    border-radius: var(--round-sm);
-    background: color-mix(in srgb, var(--primary) 20%, transparent);
-    color: var(--primary);
-  }
-
-  .usage-badge.builtin-usage {
-    background: color-mix(in srgb, var(--text) 10%, transparent);
-    color: var(--secondary-text);
   }
 
   .delete-tag-btn {
