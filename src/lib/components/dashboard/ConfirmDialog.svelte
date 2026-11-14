@@ -1,36 +1,30 @@
 <script lang="ts">
-  import { Modal } from "@hermitk/bluenite";
-  import { TriangleAlertIcon } from "lucide-svelte";
-  import DialogActions from "./DialogActions.svelte";
+  import { Modal } from '@hermitk/bluenite'
+  import { TriangleAlertIcon } from 'lucide-svelte'
+  import DialogActions from './DialogActions.svelte'
 
   interface Props {
-    open: boolean;
-    title: string;
-    message: string;
-    confirmLabel?: string;
-    busy?: boolean;
-    onconfirm: () => void;
-    oncancel: () => void;
+    open: boolean
+    title: string
+    message: string
+    confirmLabel?: string
+    busy?: boolean
+    onconfirm: () => void
+    oncancel: () => void
   }
 
   let {
     open = $bindable(),
     title,
     message,
-    confirmLabel = "Delete",
+    confirmLabel = 'Delete',
     busy = false,
     onconfirm,
     oncancel,
-  }: Props = $props();
+  }: Props = $props()
 </script>
 
-<Modal
-  bind:open
-  size="sm"
-  {title}
-  onClose={oncancel}
-  closeOnBackdropClick={!busy}
->
+<Modal bind:open size="sm" {title} onClose={oncancel} closeOnBackdropClick={!busy}>
   <div class="body">
     <div class="icon-wrap" aria-hidden="true">
       <TriangleAlertIcon size={22} />

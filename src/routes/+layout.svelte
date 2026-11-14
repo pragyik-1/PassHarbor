@@ -1,13 +1,13 @@
 <script lang="ts">
-  import type { Snippet } from "svelte";
-  import { initTheme, ToastManager } from "@hermitk/bluenite";
-  import "@hermitk/bluenite/styles/theme.css";
-  import "#lib/styles/global.css";
+  import type { Snippet } from 'svelte'
+  import { initTheme, ToastManager } from '@hermitk/bluenite'
+  import '@hermitk/bluenite/styles/theme.css'
+  import '#lib/styles/global.css'
 
-  let { children }: { children: Snippet } = $props();
+  let { children }: { children: Snippet } = $props()
 
   // Apply the stored theme before the app renders to avoid a color flash.
-  initTheme();
+  initTheme()
 </script>
 
 {@render children()}

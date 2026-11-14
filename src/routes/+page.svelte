@@ -1,107 +1,96 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
-  import { goto } from "$app/navigation";
-  import { Button, Card, Input } from "@hermitk/bluenite";
-  import {
-    unlock,
-    getSession,
-    isInvalidMasterKeyError,
-    isTooManyAttemptsError,
-  } from "#lib/api.ts";
-  import {
-    EyeIcon,
-    EyeOffIcon,
-    KeyRoundIcon,
-    LockIcon,
-    TriangleAlertIcon,
-  } from "lucide-svelte";
-  import BrandMark from "#lib/components/BrandMark.svelte";
-  import ThemeToggle from "#lib/components/ThemeToggle.svelte";
+  import { onMount, onDestroy } from 'svelte'
+  import { goto } from '$app/navigation'
+  import { Button, Card, Input } from '@hermitk/bluenite'
+  import { unlock, getSession, isInvalidMasterKeyError, isTooManyAttemptsError } from '#lib/api.ts'
+  import { EyeIcon, EyeOffIcon, KeyRoundIcon, LockIcon, TriangleAlertIcon } from 'lucide-svelte'
+  import BrandMark from '#lib/components/BrandMark.svelte'
+  import ThemeToggle from '#lib/components/ThemeToggle.svelte'
 
-  let passphrase = $state("");
-  let error = $state("");
-  let busy = $state(false);
-  let showPassphrase = $state(false);
-  let capsLock = $state(false);
-  let passphraseInput = $state<HTMLInputElement | null>(null);
+  let passphrase = $state('')
+  let error = $state('')
+  let busy = $state(false)
+  let showPassphrase = $state(false)
+  let capsLock = $state(false)
+  let passphraseInput = $state<HTMLInputElement | null>(null)
 
-  let lockoutRemaining = $state(0);
-  let lockoutInterval: ReturnType<typeof setInterval> | null = null;
-  const isLockedOut = $derived(lockoutRemaining > 0);
+  let lockoutRemaining = $state(0)
+  let lockoutInterval: ReturnType<typeof setInterval> | null = null
+  const isLockedOut = $derived(lockoutRemaining > 0)
 
   function startLockoutCountdown(seconds: number) {
-    if (lockoutInterval !== null) clearInterval(lockoutInterval);
-    lockoutRemaining = seconds;
+    if (lockoutInterval !== null) clearInterval(lockoutInterval)
+    lockoutRemaining = seconds
     lockoutInterval = setInterval(() => {
-      lockoutRemaining--;
+      lockoutRemaining--
       if (lockoutRemaining <= 0) {
-        if (lockoutInterval !== null) clearInterval(lockoutInterval);
-        lockoutInterval = null;
-        lockoutRemaining = 0;
-        error = "";
+        if (lockoutInterval !== null) clearInterval(lockoutInterval)
+        lockoutInterval = null
+        lockoutRemaining = 0
+        error = ''
       } else {
-        error = `Too many failed attempts. Please try again after ${lockoutRemaining} seconds`;
+        error = `Too many failed attempts. Please try again after ${lockoutRemaining} seconds`
       }
-    }, 1000);
+    }, 1000)
   }
 
   onMount(async () => {
     try {
-      const session = await getSession();
+      const session = await getSession()
       if (session.unlocked) {
-        await goto("/dashboard", { replace: true });
-        return;
+        await goto('/dashboard', { replace: true })
+        return
       }
     } catch {
       // Ignored: vault is locked
     }
-    passphraseInput?.focus();
-  });
+    passphraseInput?.focus()
+  })
 
   onDestroy(() => {
-    if (lockoutInterval !== null) clearInterval(lockoutInterval);
-  });
+    if (lockoutInterval !== null) clearInterval(lockoutInterval)
+  })
 
   function describeError(cause: unknown): string {
     return isInvalidMasterKeyError(cause)
-      ? "Incorrect passphrase. Please try again."
-      : String(cause);
+      ? 'Incorrect passphrase. Please try again.'
+      : String(cause)
   }
 
   function checkCapsLock(event: KeyboardEvent) {
-    capsLock = event.getModifierState("CapsLock");
+    capsLock = event.getModifierState('CapsLock')
   }
 
   function toggleVisibility() {
-    showPassphrase = !showPassphrase;
-    passphraseInput?.focus();
+    showPassphrase = !showPassphrase
+    passphraseInput?.focus()
   }
 
   async function submit(event: SubmitEvent) {
-    event.preventDefault();
-    if (busy || isLockedOut) return;
+    event.preventDefault()
+    if (busy || isLockedOut) return
     if (passphrase.length === 0) {
-      error = "Enter your master passphrase.";
-      passphraseInput?.focus();
-      return;
+      error = 'Enter your master passphrase.'
+      passphraseInput?.focus()
+      return
     }
 
-    error = "";
-    busy = true;
+    error = ''
+    busy = true
     try {
-      await unlock(passphrase);
-      passphrase = "";
-      await goto("/dashboard", { replace: true });
+      await unlock(passphrase)
+      passphrase = ''
+      await goto('/dashboard', { replace: true })
     } catch (cause) {
-      error = describeError(cause);
-      passphraseInput?.focus();
+      error = describeError(cause)
+      passphraseInput?.focus()
       if (isTooManyAttemptsError(cause)) {
-        const match = String(cause).match(/(\d+)\s+seconds/);
-        const secs = match ? parseInt(match[1], 10) : 30;
-        startLockoutCountdown(secs);
+        const match = String(cause).match(/(\d+)\s+seconds/)
+        const secs = match ? parseInt(match[1], 10) : 30
+        startLockoutCountdown(secs)
       }
     } finally {
-      busy = false;
+      busy = false
     }
   }
 </script>
@@ -141,9 +130,7 @@
                 color="secondary"
                 size="sm"
                 class="reveal-toggle"
-                aria-label={showPassphrase
-                  ? "Hide passphrase"
-                  : "Show passphrase"}
+                aria-label={showPassphrase ? 'Hide passphrase' : 'Show passphrase'}
                 aria-pressed={showPassphrase}
                 onclick={toggleVisibility}
               >
@@ -163,14 +150,14 @@
               bind:value={passphrase}
               class="login-input"
               helperText="If this is your first time here, this will be your master passphrase and it can't be recovered."
-              type={showPassphrase ? "text" : "password"}
+              type={showPassphrase ? 'text' : 'password'}
               placeholder="Enter your master passphrase"
               disabled={busy}
               error={error || undefined}
               onkeydown={checkCapsLock}
               onkeyup={checkCapsLock}
               onblur={() => {
-                capsLock = false;
+                capsLock = false
               }}
             />
 
@@ -183,7 +170,7 @@
           </div>
 
           <Button type="submit" size="md" class="login-submit" loading={busy}>
-            {busy ? "Unlocking…" : "Unlock vault"}
+            {busy ? 'Unlocking…' : 'Unlock vault'}
           </Button>
         </form>
       </Card>

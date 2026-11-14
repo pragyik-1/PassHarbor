@@ -1,0 +1,26 @@
+plugins:
+  - 'prettier-plugin-svelte'
+singleQuote: true
+jsxSingleQuote: true
+semi: false
+trailingComma: 'all'
+printWidth: 100
+tabWidth: 2
+useTabs: false
+bracketSpacing: true
+bracketSameLine: false
+singleAttributePerLine: false
+arrowParens: 'always'
+proseWrap: 'preserve'
+endOfLine: 'lf'
+embeddedLanguageFormatting: 'auto'
+quoteProps: 'as-needed'
+
+svelteSortOrder: 'options-scripts-markup-styles'
+svelteAllowShorthand: true
+svelteIndentScriptAndStyle: true
+
+overrides:
+  - files: '*.svelte'
+    options:
+      parser: 'svelte'

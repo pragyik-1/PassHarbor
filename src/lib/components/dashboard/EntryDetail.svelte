@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
-  import { Button } from "@hermitk/bluenite";
+  import { onDestroy } from 'svelte'
+  import { Button } from '@hermitk/bluenite'
   import {
     UserIcon,
     MailIcon,
@@ -11,91 +11,81 @@
     KeyRoundIcon,
     ClockIcon,
     PlusIcon,
-  } from "lucide-svelte";
-  import type { EntrySummary, EntryDetail } from "#lib/api.ts";
-  import { timeAgo, formatDateTime } from "#lib/time.ts";
-  import MetaRow from "./MetaRow.svelte";
-  import SecretField from "./SecretField.svelte";
+  } from 'lucide-svelte'
+  import type { EntrySummary, EntryDetail } from '#lib/api.ts'
+  import { timeAgo, formatDateTime } from '#lib/time.ts'
+  import MetaRow from './MetaRow.svelte'
+  import SecretField from './SecretField.svelte'
 
   interface Props {
-    entry: EntrySummary | null;
-    detail: EntryDetail | null;
-    loading: boolean;
-    onedit: () => void;
-    ondelete: () => void;
-    onchangepassword: () => void;
-    onaddpassword: () => void;
-    oncopy: (text: string, label: string) => void;
+    entry: EntrySummary | null
+    detail: EntryDetail | null
+    loading: boolean
+    onedit: () => void
+    ondelete: () => void
+    onchangepassword: () => void
+    onaddpassword: () => void
+    oncopy: (text: string, label: string) => void
   }
 
-  let {
-    entry,
-    detail,
-    loading,
-    onedit,
-    ondelete,
-    onchangepassword,
-    onaddpassword,
-    oncopy,
-  }: Props = $props();
+  let { entry, detail, loading, onedit, ondelete, onchangepassword, onaddpassword, oncopy }: Props =
+    $props()
 
-  let revealedCurrent = $state(false);
-  let revealedHistory = $state<Set<number>>(new Set());
-  let copiedLabel = $state<string | null>(null);
-  let copiedTimer: ReturnType<typeof setTimeout> | null = null;
-  let previousEntryId: number | null = null;
+  let revealedCurrent = $state(false)
+  let revealedHistory = $state<Set<number>>(new Set())
+  let copiedLabel = $state<string | null>(null)
+  let copiedTimer: ReturnType<typeof setTimeout> | null = null
+  let previousEntryId: number | null = null
 
   function resetSecrets() {
-    revealedCurrent = false;
-    revealedHistory = new Set();
-    copiedLabel = null;
+    revealedCurrent = false
+    revealedHistory = new Set()
+    copiedLabel = null
     if (copiedTimer) {
-      clearTimeout(copiedTimer);
-      copiedTimer = null;
+      clearTimeout(copiedTimer)
+      copiedTimer = null
     }
   }
 
   // Reset revealed secrets only when the selected entry changes, not on every
   // data refresh of the same entry (e.g. after a password update).
   $effect(() => {
-    const currentId = entry?.id ?? null;
+    const currentId = entry?.id ?? null
     if (currentId !== previousEntryId) {
-      previousEntryId = currentId;
-      resetSecrets();
+      previousEntryId = currentId
+      resetSecrets()
     }
-  });
+  })
 
   onDestroy(() => {
-    if (copiedTimer) clearTimeout(copiedTimer);
-  });
+    if (copiedTimer) clearTimeout(copiedTimer)
+  })
 
   function markCopied(label: string) {
-    if (copiedTimer) clearTimeout(copiedTimer);
-    copiedLabel = label;
+    if (copiedTimer) clearTimeout(copiedTimer)
+    copiedLabel = label
     copiedTimer = setTimeout(() => {
-      copiedLabel = null;
-      copiedTimer = null;
-    }, 1500);
+      copiedLabel = null
+      copiedTimer = null
+    }, 1500)
   }
 
   function copy(text: string, label: string) {
-    oncopy(text, label);
-    markCopied(label);
+    oncopy(text, label)
+    markCopied(label)
   }
 
   function toggleHistoryReveal(id: number) {
-    const next = new Set(revealedHistory);
+    const next = new Set(revealedHistory)
     if (next.has(id)) {
-      next.delete(id);
+      next.delete(id)
     } else {
-      next.add(id);
+      next.add(id)
     }
-    revealedHistory = next;
+    revealedHistory = next
   }
 
-  const sortedHistory = $derived(
-    detail ? [...detail.history].reverse() : [],
-  );
+  const sortedHistory = $derived(detail ? [...detail.history].reverse() : [])
 </script>
 
 {#if !entry}
@@ -160,8 +150,8 @@
       <MetaRow
         label="Username"
         value={detail.entry.username}
-        copied={copiedLabel === "Username"}
-        oncopy={() => copy(detail.entry.username ?? "", "Username")}
+        copied={copiedLabel === 'Username'}
+        oncopy={() => copy(detail.entry.username ?? '', 'Username')}
       >
         {#snippet icon()}
           <UserIcon size={14} />
@@ -171,8 +161,8 @@
       <MetaRow
         label="Email"
         value={detail.entry.email}
-        copied={copiedLabel === "Email"}
-        oncopy={() => copy(detail.entry.email ?? "", "Email")}
+        copied={copiedLabel === 'Email'}
+        oncopy={() => copy(detail.entry.email ?? '', 'Email')}
       >
         {#snippet icon()}
           <MailIcon size={14} />
@@ -183,8 +173,8 @@
         label="URL"
         value={detail.entry.url}
         mono
-        copied={copiedLabel === "URL"}
-        oncopy={() => copy(detail.entry.url ?? "", "URL")}
+        copied={copiedLabel === 'URL'}
+        oncopy={() => copy(detail.entry.url ?? '', 'URL')}
       >
         {#snippet icon()}
           <GlobeIcon size={14} />
@@ -214,20 +204,15 @@
           <SecretField
             value={detail.current_password}
             revealed={revealedCurrent}
-            copied={copiedLabel === "Password"}
+            copied={copiedLabel === 'Password'}
             label="Password"
             onreveal={() => (revealedCurrent = !revealedCurrent)}
-            oncopy={() => copy(detail.current_password ?? "", "Password")}
+            oncopy={() => copy(detail.current_password ?? '', 'Password')}
           />
         </div>
 
         <div class="pw-footer-actions">
-          <Button
-            variant="ghost"
-            color="secondary"
-            size="sm"
-            onclick={onchangepassword}
-          >
+          <Button variant="ghost" color="secondary" size="sm" onclick={onchangepassword}>
             Change password
           </Button>
         </div>
@@ -354,8 +339,13 @@
   }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.45; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

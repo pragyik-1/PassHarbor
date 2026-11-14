@@ -1,12 +1,12 @@
 <script lang="ts">
   interface Props {
-    size?: "sm" | "md";
+    size?: 'sm' | 'md'
   }
 
-  let { size = "md" }: Props = $props();
+  let { size = 'md' }: Props = $props()
 </script>
 
-<span class="brand-mark" class:sm={size === "sm"} aria-hidden="true">
+<span class="brand-mark" class:sm={size === 'sm'} aria-hidden="true">
   <svg
     viewBox="0 0 24 24"
     fill="none"

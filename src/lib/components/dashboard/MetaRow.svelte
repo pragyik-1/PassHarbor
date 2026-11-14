@@ -1,16 +1,16 @@
 <script lang="ts">
-  import type { Snippet } from "svelte";
-  import { Button } from "@hermitk/bluenite";
-  import { CheckIcon, CopyIcon } from "lucide-svelte";
+  import type { Snippet } from 'svelte'
+  import { Button } from '@hermitk/bluenite'
+  import { CheckIcon, CopyIcon } from 'lucide-svelte'
 
   interface Props {
-    icon: Snippet;
-    label: string;
-    value: string | null;
-    mono?: boolean;
-    multiline?: boolean;
-    copied?: boolean;
-    oncopy?: () => void;
+    icon: Snippet
+    label: string
+    value: string | null
+    mono?: boolean
+    multiline?: boolean
+    copied?: boolean
+    oncopy?: () => void
   }
 
   let {
@@ -21,20 +21,15 @@
     multiline = false,
     copied = false,
     oncopy,
-  }: Props = $props();
+  }: Props = $props()
 </script>
 
 <div class="meta-row" class:muted={!value}>
   <span class="meta-icon" aria-hidden="true">{@render icon()}</span>
   <div class="meta-content">
     <span class="meta-label">{label}</span>
-    <span
-      class="meta-value"
-      class:muted-text={!value}
-      class:mono={mono && value}
-      class:multiline={multiline}
-    >
-      {value ?? "Not set"}
+    <span class="meta-value" class:muted-text={!value} class:mono={mono && value} class:multiline>
+      {value ?? 'Not set'}
     </span>
   </div>
   {#if value && oncopy}
@@ -110,7 +105,7 @@
   }
 
   .meta-value.mono {
-    font-family: ui-monospace, "Cascadia Code", "Fira Mono", monospace;
+    font-family: ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
     font-size: 0.82rem;
     word-break: break-all;
   }

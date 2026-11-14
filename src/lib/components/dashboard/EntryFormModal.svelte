@@ -1,23 +1,23 @@
 <script lang="ts">
-  import { Modal, Button, Input, Textarea, Select } from "@hermitk/bluenite";
-  import type { SelectOption } from "@hermitk/bluenite";
-  import { DicesIcon, EyeIcon, EyeOffIcon } from "lucide-svelte";
-  import type { Entry, NewEntry, UpdateEntry } from "#lib/api.ts";
+  import { Modal, Button, Input, Textarea, Select } from '@hermitk/bluenite'
+  import type { SelectOption } from '@hermitk/bluenite'
+  import { DicesIcon, EyeIcon, EyeOffIcon } from 'lucide-svelte'
+  import type { Entry, NewEntry, UpdateEntry } from '#lib/api.ts'
 
-  type Mode = "create" | "edit";
+  type Mode = 'create' | 'edit'
 
   interface Props {
-    open: boolean;
-    mode: Mode;
+    open: boolean
+    mode: Mode
     /** Existing entry to prefill when mode === "edit". */
-    entry?: Entry | null;
+    entry?: Entry | null
     /** All available kinds (vault-derived and user-defined). */
-    availableKinds?: string[];
-    busy?: boolean;
-    error?: string;
-    oncreate: (data: NewEntry) => void;
-    onedit: (data: UpdateEntry) => void;
-    oncancel: () => void;
+    availableKinds?: string[]
+    busy?: boolean
+    error?: string
+    oncreate: (data: NewEntry) => void
+    onedit: (data: UpdateEntry) => void
+    oncancel: () => void
   }
 
   let {
@@ -26,89 +26,89 @@
     entry = null,
     availableKinds = [],
     busy = false,
-    error = "",
+    error = '',
     oncreate,
     onedit,
     oncancel,
-  }: Props = $props();
+  }: Props = $props()
 
-  const MAX_KIND = 64;
-  const MAX_NAME = 512;
+  const MAX_KIND = 64
+  const MAX_NAME = 512
 
-  import { DEFAULT_KINDS, mergeKinds } from "#lib/kinds.ts";
-  import { generatePassword } from "#lib/generator.ts";
+  import { DEFAULT_KINDS, mergeKinds } from '#lib/kinds.ts'
+  import { generatePassword } from '#lib/generator.ts'
 
-  let kind = $state("login");
+  let kind = $state('login')
 
   const kindOptions = $derived<SelectOption[]>(
     mergeKinds(DEFAULT_KINDS, availableKinds, kind ? [kind] : []).map((k) => ({
       label: k,
       value: k,
     })),
-  );
-  let name = $state("");
-  let username = $state("");
-  let email = $state("");
-  let url = $state("");
-  let note = $state("");
-  let password = $state("");
-  let showPassword = $state(false);
-  let localError = $state("");
+  )
+  let name = $state('')
+  let username = $state('')
+  let email = $state('')
+  let url = $state('')
+  let note = $state('')
+  let password = $state('')
+  let showPassword = $state(false)
+  let localError = $state('')
 
   $effect(() => {
     if (!open) {
-      localError = "";
-      showPassword = false;
-      password = "";
-      return;
+      localError = ''
+      showPassword = false
+      password = ''
+      return
     }
-    if (mode === "edit" && entry) {
-      kind = entry.kind;
-      name = entry.name;
-      username = entry.username ?? "";
-      email = entry.email ?? "";
-      url = entry.url ?? "";
-      note = entry.note ?? "";
+    if (mode === 'edit' && entry) {
+      kind = entry.kind
+      name = entry.name
+      username = entry.username ?? ''
+      email = entry.email ?? ''
+      url = entry.url ?? ''
+      note = entry.note ?? ''
     } else {
-      kind = "login";
-      name = "";
-      username = "";
-      email = "";
-      url = "";
-      note = "";
+      kind = 'login'
+      name = ''
+      username = ''
+      email = ''
+      url = ''
+      note = ''
     }
-  });
+  })
 
   function nullIfBlank(v: string): string | null {
-    const trimmed = v.trim();
-    return trimmed === "" ? null : trimmed;
+    const trimmed = v.trim()
+    return trimmed === '' ? null : trimmed
   }
 
   function handleSubmit(e: SubmitEvent) {
-    e.preventDefault();
-    localError = "";
+    e.preventDefault()
+    localError = ''
 
-    const trimmedKind = kind.trim();
-    const trimmedName = name.trim();
+    const trimmedKind = kind.trim()
+    const trimmedName = name.trim()
 
     if (!trimmedKind) {
-      localError = "Kind is required.";
-      return;
+      localError = 'Kind is required.'
+      return
     }
     if (trimmedKind.length > MAX_KIND) {
-      localError = `Kind must be at most ${MAX_KIND} characters.`;
-      return;
+      localError = `Kind must be at most ${MAX_KIND} characters.`
+      return
     }
     if (!trimmedName) {
-      localError = "Name is required.";
-      return;
+      localError = 'Name is required.'
+      return
     }
     if (trimmedName.length > MAX_NAME) {
-      localError = `Name must be at most ${MAX_NAME} characters.`;
-      return;
+      localError = `Name must be at most ${MAX_NAME} characters.`
+      return
     }
 
-    if (mode === "create") {
+    if (mode === 'create') {
       oncreate({
         kind: trimmedKind,
         name: trimmedName,
@@ -117,7 +117,7 @@
         url: nullIfBlank(url),
         note: nullIfBlank(note),
         password: nullIfBlank(password),
-      });
+      })
     } else {
       onedit({
         kind: trimmedKind,
@@ -126,27 +126,19 @@
         email: nullIfBlank(email),
         url: nullIfBlank(url),
         note: nullIfBlank(note),
-      });
+      })
     }
   }
 
-  const title = $derived(mode === "create" ? "New entry" : "Edit entry");
-  const displayError = $derived(localError || error);
+  const title = $derived(mode === 'create' ? 'New entry' : 'Edit entry')
+  const displayError = $derived(localError || error)
 </script>
 
-<Modal
-  bind:open
-  size="md"
-  {title}
-  onClose={oncancel}
-  closeOnBackdropClick={!busy}
->
+<Modal bind:open size="md" {title} onClose={oncancel} closeOnBackdropClick={!busy}>
   <form id="entry-form" onsubmit={handleSubmit} novalidate>
     <div class="row-2">
       <div class="field">
-        <label for="entry-kind"
-          >Kind <span class="req" aria-hidden="true">*</span></label
-        >
+        <label for="entry-kind">Kind <span class="req" aria-hidden="true">*</span></label>
         <Select
           id="entry-kind"
           bind:value={kind}
@@ -157,9 +149,7 @@
       </div>
 
       <div class="field">
-        <label for="entry-name"
-          >Name <span class="req" aria-hidden="true">*</span></label
-        >
+        <label for="entry-name">Name <span class="req" aria-hidden="true">*</span></label>
         <Input
           id="entry-name"
           bind:value={name}
@@ -217,7 +207,7 @@
       />
     </div>
 
-    {#if mode === "create"}
+    {#if mode === 'create'}
       <div class="field">
         <div class="field-head">
           <label for="entry-password">Initial password</label>
@@ -228,7 +218,7 @@
               color="secondary"
               size="sm"
               onclick={() => {
-                password = generatePassword();
+                password = generatePassword()
               }}
               title="Generate random password"
             >
@@ -242,7 +232,7 @@
               color="secondary"
               size="sm"
               class="reveal-btn"
-              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
               aria-pressed={showPassword}
               onclick={() => (showPassword = !showPassword)}
             >
@@ -258,7 +248,7 @@
         </div>
         <Input
           id="entry-password"
-          type={showPassword ? "text" : "password"}
+          type={showPassword ? 'text' : 'password'}
           bind:value={password}
           placeholder="Optional. Can be set later"
           autocomplete="new-password"
@@ -268,8 +258,7 @@
       </div>
     {:else}
       <p class="pw-note">
-        To change the password, use the "Change password" action in the detail
-        panel after saving.
+        To change the password, use the "Change password" action in the detail panel after saving.
       </p>
     {/if}
 
@@ -280,17 +269,11 @@
 
   {#snippet footer()}
     <div class="actions">
-      <Button
-        variant="ghost"
-        color="secondary"
-        size="sm"
-        disabled={busy}
-        onclick={oncancel}
-      >
+      <Button variant="ghost" color="secondary" size="sm" disabled={busy} onclick={oncancel}>
         Cancel
       </Button>
       <Button type="submit" form="entry-form" size="sm" loading={busy}>
-        {mode === "create" ? "Add entry" : "Save changes"}
+        {mode === 'create' ? 'Add entry' : 'Save changes'}
       </Button>
     </div>
   {/snippet}
@@ -346,7 +329,7 @@
   }
 
   :global(.mono-input input) {
-    font-family: ui-monospace, "Cascadia Code", "Fira Mono", monospace;
+    font-family: ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
     font-size: 0.875rem;
     letter-spacing: 0.03em;
   }

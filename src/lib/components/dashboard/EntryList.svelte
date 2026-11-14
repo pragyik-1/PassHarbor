@@ -1,30 +1,24 @@
 <script lang="ts">
-  import { Button, DropdownMenu, DropdownMenuItem } from "@hermitk/bluenite";
-  import {
-    SearchIcon,
-    XIcon,
-    ShieldIcon,
-    SortAscIcon,
-    PlusIcon,
-  } from "lucide-svelte";
-  import type { EntrySummary, KindCount } from "#lib/api.ts";
-  import { isKindActive } from "#lib/kinds.ts";
-  import { timeAgo } from "#lib/time.ts";
+  import { Button, DropdownMenu, DropdownMenuItem } from '@hermitk/bluenite'
+  import { SearchIcon, XIcon, ShieldIcon, SortAscIcon, PlusIcon } from 'lucide-svelte'
+  import type { EntrySummary, KindCount } from '#lib/api.ts'
+  import { isKindActive } from '#lib/kinds.ts'
+  import { timeAgo } from '#lib/time.ts'
 
-  export type SortKey = "name" | "updated" | "created";
+  export type SortKey = 'name' | 'updated' | 'created'
 
   interface Props {
-    entries: EntrySummary[];
-    kinds: KindCount[];
-    totalCount: number;
-    selectedId: number | null;
-    loading: boolean;
-    kindFilter: string | null;
-    search?: string;
-    sortKey?: SortKey;
-    onfilterkind: (k: string | null) => void;
-    onselect: (id: number) => void;
-    onnew: () => void;
+    entries: EntrySummary[]
+    kinds: KindCount[]
+    totalCount: number
+    selectedId: number | null
+    loading: boolean
+    kindFilter: string | null
+    search?: string
+    sortKey?: SortKey
+    onfilterkind: (k: string | null) => void
+    onselect: (id: number) => void
+    onnew: () => void
   }
 
   let {
@@ -34,50 +28,48 @@
     selectedId,
     loading,
     kindFilter,
-    search = $bindable(""),
-    sortKey = $bindable<SortKey>("name"),
+    search = $bindable(''),
+    sortKey = $bindable<SortKey>('name'),
     onfilterkind,
     onselect,
     onnew,
-  }: Props = $props();
+  }: Props = $props()
 
-  let sortOpen = $state(false);
-  let sortRef: HTMLButtonElement | null = $state(null);
+  let sortOpen = $state(false)
+  let sortRef: HTMLButtonElement | null = $state(null)
 
   function clearSearch() {
-    search = "";
+    search = ''
   }
 
   function secondaryLine(e: EntrySummary): string {
-    return e.username ?? e.email ?? e.url ?? "";
+    return e.username ?? e.email ?? e.url ?? ''
   }
 
   function handleKeydown(event: KeyboardEvent, id: number) {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onselect(id);
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      onselect(id)
     }
   }
 
   const sortOptions: { key: SortKey; label: string }[] = [
-    { key: "name", label: "Name A–Z" },
-    { key: "updated", label: "Recently updated" },
-    { key: "created", label: "Recently added" },
-  ];
+    { key: 'name', label: 'Name A–Z' },
+    { key: 'updated', label: 'Recently updated' },
+    { key: 'created', label: 'Recently added' },
+  ]
 
-  const currentSortLabel = $derived(
-    sortOptions.find((o) => o.key === sortKey)?.label ?? "Sort",
-  );
+  const currentSortLabel = $derived(sortOptions.find((o) => o.key === sortKey)?.label ?? 'Sort')
 
   function selectSort(key: SortKey) {
-    sortKey = key;
-    sortOpen = false;
+    sortKey = key
+    sortOpen = false
   }
 
   function handleSortKeydown(e: KeyboardEvent, key: SortKey) {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      selectSort(key);
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      selectSort(key)
     }
   }
 </script>
@@ -86,9 +78,7 @@
   <!-- Search + sort bar -->
   <div class="toolbar">
     <div class="search-wrap">
-      <span class="search-icon" aria-hidden="true"
-        ><SearchIcon size={14} /></span
-      >
+      <span class="search-icon" aria-hidden="true"><SearchIcon size={14} /></span>
       <input
         id="entry-search"
         class="search-input"
@@ -119,11 +109,7 @@
       onclick={() => (sortOpen = !sortOpen)}
     >
       {#snippet icon()}
-        <SortAscIcon
-          size={14}
-          aria-hidden="true"
-          style="color: var(--primary)"
-        />
+        <SortAscIcon size={14} aria-hidden="true" style="color: var(--primary)" />
       {/snippet}
     </Button>
 
@@ -187,9 +173,7 @@
           <ShieldIcon size={26} />
         </div>
         <p class="empty-title">Your vault is empty</p>
-        <p class="empty-sub">
-          Add your first entry to start storing credentials securely.
-        </p>
+        <p class="empty-sub">Add your first entry to start storing credentials securely.</p>
         <Button size="sm" onclick={onnew}>
           {#snippet icon()}
             <PlusIcon size={15} />
@@ -200,9 +184,7 @@
     {:else if entries.length === 0}
       <div class="empty-state">
         <p class="empty-title">No entries match your search</p>
-        <button class="link-btn" type="button" onclick={clearSearch}>
-          Clear search
-        </button>
+        <button class="link-btn" type="button" onclick={clearSearch}> Clear search </button>
       </div>
     {:else}
       {#each entries as entry (entry.id)}

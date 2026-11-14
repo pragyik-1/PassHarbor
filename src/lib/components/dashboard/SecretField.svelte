@@ -1,34 +1,23 @@
 <script lang="ts">
-  import { Button } from "@hermitk/bluenite";
-  import { CheckIcon, CopyIcon, EyeIcon, EyeOffIcon } from "lucide-svelte";
+  import { Button } from '@hermitk/bluenite'
+  import { CheckIcon, CopyIcon, EyeIcon, EyeOffIcon } from 'lucide-svelte'
 
   interface Props {
-    value: string;
-    revealed: boolean;
-    copied: boolean;
-    label: string;
-    compact?: boolean;
-    onreveal: () => void;
-    oncopy: () => void;
+    value: string
+    revealed: boolean
+    copied: boolean
+    label: string
+    compact?: boolean
+    onreveal: () => void
+    oncopy: () => void
   }
 
-  let {
-    value,
-    revealed,
-    copied,
-    label,
-    compact = false,
-    onreveal,
-    oncopy,
-  }: Props = $props();
+  let { value, revealed, copied, label, compact = false, onreveal, oncopy }: Props = $props()
 </script>
 
 <div class="secret-field" class:compact>
-  <span
-    class="secret-value"
-    aria-label={revealed ? `${label} revealed` : `${label} hidden`}
-  >
-    {revealed ? value : "••••••••••••"}
+  <span class="secret-value" aria-label={revealed ? `${label} revealed` : `${label} hidden`}>
+    {revealed ? value : '••••••••••••'}
   </span>
   <div class="secret-actions">
     <Button
@@ -37,7 +26,7 @@
       size="sm"
       class="secret-btn"
       aria-label={revealed ? `Hide ${label.toLowerCase()}` : `Reveal ${label.toLowerCase()}`}
-      title={revealed ? "Hide" : "Reveal"}
+      title={revealed ? 'Hide' : 'Reveal'}
       aria-pressed={revealed}
       onclick={onreveal}
     >
@@ -80,7 +69,7 @@
 
   .secret-value {
     flex: 1;
-    font-family: ui-monospace, "Cascadia Code", "Fira Mono", monospace;
+    font-family: ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
     font-size: 0.875rem;
     letter-spacing: 0.05em;
     word-break: break-all;

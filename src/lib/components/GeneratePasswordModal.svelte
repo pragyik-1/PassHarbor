@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Modal, Button, Input, Switch, toast } from "@hermitk/bluenite";
+  import { Modal, Button, Input, Switch, toast } from '@hermitk/bluenite'
   import {
     CopyIcon,
     CheckIcon,
@@ -7,34 +7,34 @@
     ChevronDownIcon,
     ChevronUpIcon,
     ShieldCheckIcon,
-  } from "lucide-svelte";
+  } from 'lucide-svelte'
   import {
     generatePassword,
     calculateEntropy,
     DEFAULT_GENERATOR_OPTIONS,
     type PasswordGeneratorOptions,
-  } from "#lib/generator.ts";
+  } from '#lib/generator.ts'
 
   interface Props {
-    open: boolean;
-    onclose?: () => void;
+    open: boolean
+    onclose?: () => void
   }
 
-  let { open = $bindable(), onclose }: Props = $props();
+  let { open = $bindable(), onclose }: Props = $props()
 
   // ── Generator Configuration State ──────────────────────────
 
   let genOpts = $state<PasswordGeneratorOptions>({
     ...DEFAULT_GENERATOR_OPTIONS,
-    customCharset: "",
-  });
+    customCharset: '',
+  })
 
-  let showAdvanced = $state(false);
-  let copied = $state(false);
-  let copiedTimeout: ReturnType<typeof setTimeout> | null = null;
-  let isSpinning = $state(false);
+  let showAdvanced = $state(false)
+  let copied = $state(false)
+  let copiedTimeout: ReturnType<typeof setTimeout> | null = null
+  let isSpinning = $state(false)
 
-  let currentPassword = $state("");
+  let currentPassword = $state('')
 
   // ── Password Generation ────────────────────────────────────
 
@@ -53,94 +53,92 @@
         minUppercase: genOpts.uppercase ? (genOpts.minUppercase ?? 0) : 0,
         minNumbers: genOpts.numbers ? (genOpts.minNumbers ?? 0) : 0,
         minSymbols: genOpts.symbols ? (genOpts.minSymbols ?? 0) : 0,
-      };
-      currentPassword = generatePassword(opts);
+      }
+      currentPassword = generatePassword(opts)
     } catch {
       // If all character sets are unchecked, display empty state
-      currentPassword = "";
+      currentPassword = ''
     }
   }
 
   function handleRegenerateClick() {
-    isSpinning = true;
-    regenerate();
+    isSpinning = true
+    regenerate()
     setTimeout(() => {
-      isSpinning = false;
-    }, 300);
+      isSpinning = false
+    }, 300)
   }
 
   // Generate fresh password on open or configuration changes
   $effect(() => {
     if (open) {
-      regenerate();
+      regenerate()
     }
-  });
+  })
 
   // ── Entropy & Strength Calculation ────────────────────────
 
-  const entropyBits = $derived(
-    currentPassword ? calculateEntropy(genOpts) : 0,
-  );
+  const entropyBits = $derived(currentPassword ? calculateEntropy(genOpts) : 0)
 
   const strength = $derived.by(() => {
     if (!currentPassword || entropyBits < 40) {
       return {
-        label: "Weak",
-        color: "var(--danger)",
+        label: 'Weak',
+        color: 'var(--danger)',
         pct: Math.min(30, Math.max(10, entropyBits)),
-      };
+      }
     }
     if (entropyBits < 65) {
       return {
-        label: "Moderate",
-        color: "#f59e0b",
+        label: 'Moderate',
+        color: '#f59e0b',
         pct: 60,
-      };
+      }
     }
     if (entropyBits < 90) {
       return {
-        label: "Strong",
-        color: "#10b981",
+        label: 'Strong',
+        color: '#10b981',
         pct: 85,
-      };
+      }
     }
     return {
-      label: "Very strong",
-      color: "var(--primary)",
+      label: 'Very strong',
+      color: 'var(--primary)',
       pct: 100,
-    };
-  });
+    }
+  })
 
   // ── Copy to Clipboard ──────────────────────────────────────
 
   async function copyPassword() {
-    if (!currentPassword) return;
+    if (!currentPassword) return
     try {
-      await navigator.clipboard.writeText(currentPassword);
-      copied = true;
-      if (copiedTimeout) clearTimeout(copiedTimeout);
+      await navigator.clipboard.writeText(currentPassword)
+      copied = true
+      if (copiedTimeout) clearTimeout(copiedTimeout)
       copiedTimeout = setTimeout(() => {
-        copied = false;
-      }, 1800);
+        copied = false
+      }, 1800)
       toast.show({
-        message: "Password copied to clipboard",
-        variant: "success",
+        message: 'Password copied to clipboard',
+        variant: 'success',
         duration: 2000,
-      });
+      })
     } catch {
       toast.show({
-        message: "Failed to copy password",
-        variant: "danger",
-      });
+        message: 'Failed to copy password',
+        variant: 'danger',
+      })
     }
   }
 
   function handleClose() {
-    open = false;
-    onclose?.();
+    open = false
+    onclose?.()
   }
 
-  const presets = [16, 20, 24, 32, 36, 48];
+  const presets = [16, 20, 24, 32, 36, 48]
 </script>
 
 <Modal bind:open size="md" title="Password generator" onClose={handleClose}>
@@ -149,7 +147,7 @@
     <div class="display-card">
       <div class="pw-box">
         <span class="pw-text" class:empty={!currentPassword}>
-          {currentPassword || "Select at least one character type"}
+          {currentPassword || 'Select at least one character type'}
         </span>
 
         <div class="pw-actions">
@@ -235,7 +233,7 @@
             class="preset-chip"
             class:active={genOpts.length === preset}
             onclick={() => {
-              genOpts.length = preset;
+              genOpts.length = preset
             }}
           >
             {preset} chars
@@ -295,9 +293,7 @@
         <label class="option-row">
           <div class="option-info">
             <span class="option-name">Exclude visually similar characters</span>
-            <span class="option-sub"
-              >Avoids lookalikes like i, l, 1, I, o, 0, O</span
-            >
+            <span class="option-sub">Avoids lookalikes like i, l, 1, I, o, 0, O</span>
           </div>
           <Switch bind:checked={genOpts.excludeSimilar} size="sm" />
         </label>
@@ -306,7 +302,7 @@
           <div class="option-info">
             <span class="option-name">Exclude ambiguous symbols</span>
             <span class="option-sub"
-              >Avoids punctuation like {"{ } [ ] ( ) / \\ ' \" ` ~ , ; : . < >"}</span
+              >Avoids punctuation like {'{ } [ ] ( ) / \\ \' " ` ~ , ; : . < >'}</span
             >
           </div>
           <Switch bind:checked={genOpts.excludeAmbiguous} size="sm" />
@@ -334,9 +330,7 @@
         <div class="advanced-panel">
           <!-- Custom Charset -->
           <div class="adv-field">
-            <label for="custom-charset" class="adv-label">
-              Custom characters to include
-            </label>
+            <label for="custom-charset" class="adv-label"> Custom characters to include </label>
             <Input
               id="custom-charset"
               bind:value={genOpts.customCharset}
@@ -405,9 +399,7 @@
 
   {#snippet footer()}
     <div class="modal-footer">
-      <Button variant="ghost" color="secondary" size="sm" onclick={handleClose}>
-        Close
-      </Button>
+      <Button variant="ghost" color="secondary" size="sm" onclick={handleClose}>Close</Button>
 
       <Button size="sm" disabled={!currentPassword} onclick={copyPassword}>
         {#snippet icon()}
@@ -417,7 +409,7 @@
             <CopyIcon size={15} />
           {/if}
         {/snippet}
-        {copied ? "Copied!" : "Copy password"}
+        {copied ? 'Copied!' : 'Copy password'}
       </Button>
     </div>
   {/snippet}
@@ -452,7 +444,7 @@
   }
 
   .pw-text {
-    font-family: ui-monospace, "Cascadia Code", "Fira Mono", monospace;
+    font-family: ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
     font-size: 1.125rem;
     font-weight: 600;
     letter-spacing: 0.05em;
@@ -546,7 +538,7 @@
   }
 
   .length-badge {
-    font-family: ui-monospace, "Cascadia Code", "Fira Mono", monospace;
+    font-family: ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
     font-size: 0.8125rem;
     font-weight: 700;
     color: var(--primary);

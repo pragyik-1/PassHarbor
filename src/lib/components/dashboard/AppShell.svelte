@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { Snippet } from "svelte";
-  import { Button } from "@hermitk/bluenite";
+  import type { Snippet } from 'svelte'
+  import { Button } from '@hermitk/bluenite'
   import {
     ShieldIcon,
     LockIcon,
@@ -9,24 +9,24 @@
     TagIcon,
     SettingsIcon,
     DicesIcon,
-  } from "lucide-svelte";
-  import type { KindCount } from "#lib/api.ts";
-  import { isKindActive } from "#lib/kinds.ts";
-  import BrandMark from "#lib/components/BrandMark.svelte";
-  import ThemeToggle from "#lib/components/ThemeToggle.svelte";
+  } from 'lucide-svelte'
+  import type { KindCount } from '#lib/api.ts'
+  import { isKindActive } from '#lib/kinds.ts'
+  import BrandMark from '#lib/components/BrandMark.svelte'
+  import ThemeToggle from '#lib/components/ThemeToggle.svelte'
 
   interface Props {
-    vaultName: string;
-    totalCount: number;
-    kindCounts: KindCount[];
-    kindFilter: string | null;
-    onfilterkind: (k: string | null) => void;
-    lockBusy: boolean;
-    lockError: string;
-    onlock: () => void;
-    onnew: () => void;
-    ongenerator?: () => void;
-    children: Snippet;
+    vaultName: string
+    totalCount: number
+    kindCounts: KindCount[]
+    kindFilter: string | null
+    onfilterkind: (k: string | null) => void
+    lockBusy: boolean
+    lockError: string
+    onlock: () => void
+    onnew: () => void
+    ongenerator?: () => void
+    children: Snippet
   }
 
   let {
@@ -41,7 +41,7 @@
     onnew,
     ongenerator,
     children,
-  }: Props = $props();
+  }: Props = $props()
 </script>
 
 <div class="shell">
@@ -105,11 +105,7 @@
       {/if}
 
       <div class="nav-section-label">Tools</div>
-      <button
-        type="button"
-        class="nav-item"
-        onclick={ongenerator}
-      >
+      <button type="button" class="nav-item" onclick={ongenerator}>
         <DicesIcon size={14} aria-hidden="true" />
         <span class="nav-label">Password generator</span>
       </button>
@@ -122,12 +118,7 @@
       {/if}
 
       <!-- Settings link -->
-      <a
-        href="/settings"
-        class="settings-link"
-        aria-label="Settings"
-        title="Settings"
-      >
+      <a href="/settings" class="settings-link" aria-label="Settings" title="Settings">
         <SettingsIcon size={15} aria-hidden="true" />
         <span class="settings-label">Settings</span>
       </a>
