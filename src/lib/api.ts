@@ -11,6 +11,14 @@ import { invoke } from '@tauri-apps/api/core'
 export interface SessionInfo {
   unlocked: boolean
   vault_name: string | null
+  vault_id?: string | null
+}
+
+export interface VaultSummary {
+  id: string
+  name: string
+  created_at: number
+  is_default: boolean
 }
 
 export interface Entry {
@@ -85,8 +93,26 @@ export interface UpdateEntry {
 }
 
 /** Open the vault and return session information. */
-export async function unlock(passphrase: string): Promise<SessionInfo> {
-  return await invoke<SessionInfo>('unlock_cmd', { passphrase })
+export async function unlock(passphrase: string, vaultId?: string | null): Promise<SessionInfo> {
+  return await invoke<SessionInfo>('unlock_cmd', {
+    passphrase,
+    vaultId: vaultId ?? null,
+  })
+}
+
+/** List all known vaults with their default status. */
+export async function listVaults(): Promise<VaultSummary[]> {
+  return await invoke<VaultSummary[]>('list_vaults_cmd')
+}
+
+/** Designate a vault as default. */
+export async function setDefaultVault(vaultId: string): Promise<void> {
+  await invoke<void>('set_default_vault_cmd', { vaultId })
+}
+
+/** Create a new vault with its own master passphrase. */
+export async function createVault(name: string, passphrase: string): Promise<VaultSummary> {
+  return await invoke<VaultSummary>('create_vault_cmd', { name, passphrase })
 }
 
 /** Check the current session status without modifying state. */

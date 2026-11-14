@@ -11,6 +11,7 @@
     TagIcon,
     SparklesIcon,
     RefreshCwIcon,
+    FolderIcon,
   } from 'lucide-svelte'
   import { DEFAULT_KINDS, isDefaultKind, kindKey } from '#lib/kinds.ts'
   import {
@@ -21,9 +22,14 @@
     addCustomKind,
     removeCustomKind,
     resetCustomKinds,
+    listVaults,
+    setDefaultVault,
     isVaultLockedError,
     type KindCount,
+    type VaultSummary,
   } from '#lib/api.ts'
+  import { timeAgo } from '#lib/time.ts'
+  import CreateVaultModal from '#lib/components/CreateVaultModal.svelte'
 
   let vaultName = $state<string | null>(null)
   let savedCustomKinds = $state<string[]>([])
@@ -31,6 +37,10 @@
   let newKindInput = $state('')
   let inputError = $state('')
   let lockBusy = $state(false)
+
+  let vaults = $state<VaultSummary[]>([])
+  let defaultBusyId = $state<string | null>(null)
+  let createVaultOpen = $state(false)
 
   const customKinds = $derived(savedCustomKinds)
   const usageByKind = $derived(
@@ -45,9 +55,14 @@
         return
       }
       vaultName = session.vault_name
-      const [kinds, res] = await Promise.all([listCustomKinds(), queryEntries({})])
+      const [kinds, res, vaultList] = await Promise.all([
+        listCustomKinds(),
+        queryEntries({}),
+        listVaults(),
+      ])
       savedCustomKinds = kinds
       kindCounts = res.kinds
+      vaults = vaultList
     } catch (err) {
       if (isVaultLockedError(err)) {
         void goto('/', { replace: true })
@@ -161,6 +176,41 @@
       })
     } finally {
       lockBusy = false
+    }
+  }
+
+  async function handleSetDefaultVault(vaultId: string, name: string) {
+    if (defaultBusyId) return
+    defaultBusyId = vaultId
+    try {
+      await setDefaultVault(vaultId)
+      vaults = await listVaults()
+      toast.show({
+        message: `"${name}" set as default vault`,
+        variant: 'success',
+      })
+    } catch (err) {
+      toast.show({
+        message: `Failed to set default vault: ${err instanceof Error ? err.message : String(err)}`,
+        variant: 'danger',
+      })
+    } finally {
+      defaultBusyId = null
+    }
+  }
+
+  async function handleVaultCreated(created: VaultSummary) {
+    try {
+      vaults = await listVaults()
+      toast.show({
+        message: `Created vault "${created.name}"`,
+        variant: 'success',
+      })
+    } catch (err) {
+      toast.show({
+        message: `Failed to refresh vault list: ${err instanceof Error ? err.message : String(err)}`,
+        variant: 'danger',
+      })
     }
   }
 </script>
@@ -341,6 +391,73 @@
         </Card>
       </section>
 
+      <!-- Section: Vaults -->
+      <section class="section">
+        <div class="section-header">
+          <div class="section-icon">
+            <FolderIcon size={18} />
+          </div>
+          <div>
+            <h2 class="section-title">Vaults</h2>
+            <p class="section-desc">
+              Manage your vaults and designate which vault opens by default
+            </p>
+          </div>
+        </div>
+
+        <Card class="settings-card">
+          <div class="vaults-list">
+            {#each vaults as v (v.id)}
+              {@const isActive = vaultName === v.name}
+              <div class="vault-row">
+                <div class="vault-meta-col">
+                  <div class="vault-row-header">
+                    <span class="vault-row-name">{v.name}</span>
+                    {#if isActive}
+                      <Badge variant="success" size="sm">Active</Badge>
+                    {/if}
+                    {#if v.is_default}
+                      <Badge variant="primary" size="sm">Default</Badge>
+                    {/if}
+                  </div>
+                  <div class="vault-row-sub">
+                    Created {timeAgo(v.created_at)}
+                  </div>
+                </div>
+
+                <div class="vault-row-actions">
+                  {#if !v.is_default}
+                    <Button
+                      variant="outline"
+                      color="secondary"
+                      size="sm"
+                      loading={defaultBusyId === v.id}
+                      onclick={() => handleSetDefaultVault(v.id, v.name)}
+                    >
+                      Set as default
+                    </Button>
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          </div>
+
+          <div class="vault-footer-action">
+            <Button
+              variant="outline"
+              color="secondary"
+              size="sm"
+              onclick={() => (createVaultOpen = true)}
+            >
+              {#snippet icon()}
+                <PlusIcon size={15} />
+              {/snippet}
+              New Vault
+            </Button>
+          </div>
+        </Card>
+      </section>
+
       <!-- Section: Vault & Security -->
       <section class="section">
         <div class="section-header">
@@ -379,6 +496,8 @@
     </div>
   </div>
 </div>
+
+<CreateVaultModal bind:open={createVaultOpen} onCreated={handleVaultCreated} />
 
 <style>
   .settings-page {
@@ -606,5 +725,58 @@
   .mono-val {
     font-family: ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
     font-size: 0.85rem;
+  }
+
+  /* Vaults Section */
+  .vaults-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .vault-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--round-md);
+    background: var(--surface-hover);
+    border: 1px solid var(--border);
+  }
+
+  .vault-meta-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .vault-row-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .vault-row-name {
+    font-weight: 600;
+    font-size: 0.9375rem;
+    color: var(--text);
+  }
+
+  .vault-row-sub {
+    font-size: 0.75rem;
+    color: var(--muted-text);
+  }
+
+  .vault-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .vault-footer-action {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-start;
   }
 </style>

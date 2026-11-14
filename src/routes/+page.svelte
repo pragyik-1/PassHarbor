@@ -2,10 +2,27 @@
   import { onMount, onDestroy } from 'svelte'
   import { goto } from '$app/navigation'
   import { Button, Card, Input } from '@hermitk/bluenite'
-  import { unlock, getSession, isInvalidMasterKeyError, isTooManyAttemptsError } from '#lib/api.ts'
-  import { EyeIcon, EyeOffIcon, KeyRoundIcon, LockIcon, TriangleAlertIcon } from 'lucide-svelte'
+  import {
+    unlock,
+    getSession,
+    listVaults,
+    isInvalidMasterKeyError,
+    isTooManyAttemptsError,
+    type VaultSummary,
+  } from '#lib/api.ts'
+  import {
+    EyeIcon,
+    EyeOffIcon,
+    KeyRoundIcon,
+    LockIcon,
+    TriangleAlertIcon,
+    PlusIcon,
+    ArrowLeftRightIcon,
+  } from 'lucide-svelte'
   import BrandMark from '#lib/components/BrandMark.svelte'
   import ThemeToggle from '#lib/components/ThemeToggle.svelte'
+  import VaultSelectionModal from '#lib/components/VaultSelectionModal.svelte'
+  import CreateVaultModal from '#lib/components/CreateVaultModal.svelte'
 
   let passphrase = $state('')
   let error = $state('')
@@ -17,6 +34,13 @@
   let lockoutRemaining = $state(0)
   let lockoutInterval: ReturnType<typeof setInterval> | null = null
   const isLockedOut = $derived(lockoutRemaining > 0)
+
+  let vaults = $state<VaultSummary[]>([])
+  let selectedVaultId = $state<string | null>(null)
+  let vaultModalOpen = $state(false)
+  let createModalOpen = $state(false)
+
+  const selectedVault = $derived(vaults.find((v) => v.id === selectedVaultId) ?? null)
 
   function startLockoutCountdown(seconds: number) {
     if (lockoutInterval !== null) clearInterval(lockoutInterval)
@@ -44,6 +68,20 @@
     } catch {
       // Ignored: vault is locked
     }
+
+    try {
+      vaults = await listVaults()
+      const defaultVault = vaults.find((v) => v.is_default) ?? vaults[0] ?? null
+      if (defaultVault) {
+        selectedVaultId = defaultVault.id
+      }
+      if (vaults.length > 1) {
+        vaultModalOpen = true
+      }
+    } catch {
+      // Ignored: failed to load vaults
+    }
+
     passphraseInput?.focus()
   })
 
@@ -66,6 +104,33 @@
     passphraseInput?.focus()
   }
 
+  function handleVaultSelected(vault: VaultSummary) {
+    selectedVaultId = vault.id
+    error = ''
+    passphrase = ''
+    setTimeout(() => passphraseInput?.focus(), 50)
+  }
+
+  function handleVaultsChanged(updated: VaultSummary[]) {
+    vaults = updated
+    if (selectedVaultId === null) {
+      const defaultVault = updated.find((v) => v.is_default) ?? updated[0] ?? null
+      if (defaultVault) selectedVaultId = defaultVault.id
+    }
+  }
+
+  async function handleVaultCreated(created: VaultSummary) {
+    try {
+      vaults = await listVaults()
+    } catch {
+      // Best effort refresh
+    }
+    selectedVaultId = created.id
+    error = ''
+    passphrase = ''
+    setTimeout(() => passphraseInput?.focus(), 50)
+  }
+
   async function submit(event: SubmitEvent) {
     event.preventDefault()
     if (busy || isLockedOut) return
@@ -78,7 +143,7 @@
     error = ''
     busy = true
     try {
-      await unlock(passphrase)
+      await unlock(passphrase, selectedVaultId)
       passphrase = ''
       await goto('/dashboard', { replace: true })
     } catch (cause) {
@@ -114,7 +179,24 @@
       <Card class="login-card" noPadding>
         {#snippet header()}
           <div class="form-head">
-            <h2>Unlock your vault</h2>
+            <h2>Unlock {selectedVault ? selectedVault.name : 'your vault'}</h2>
+            {#if vaults.length > 1}
+              <div class="switch-vault-wrapper">
+                <Button
+                  type="button"
+                  variant="outline"
+                  color="primary"
+                  size="sm"
+                  class="switch-vault-btn"
+                  onclick={() => (vaultModalOpen = true)}
+                >
+                  {#snippet icon()}
+                    <ArrowLeftRightIcon size={14} />
+                  {/snippet}
+                  Switch vault
+                </Button>
+              </div>
+            {/if}
           </div>
         {/snippet}
         <form class="login-form" onsubmit={submit}>
@@ -149,7 +231,9 @@
               bind:ref={passphraseInput}
               bind:value={passphrase}
               class="login-input"
-              helperText="If this is your first time here, this will be your master passphrase and it can't be recovered."
+              helperText={vaults.length === 0
+                ? "If this is your first time here, this will be your master passphrase and it can't be recovered."
+                : `Enter the master passphrase for ${selectedVault?.name ?? 'this vault'}.`}
               type={showPassphrase ? 'text' : 'password'}
               placeholder="Enter your master passphrase"
               disabled={busy}
@@ -170,7 +254,7 @@
           </div>
 
           <Button type="submit" size="md" class="login-submit" loading={busy}>
-            {busy ? 'Unlocking…' : 'Unlock vault'}
+            {busy ? 'Unlocking…' : `Unlock ${selectedVault?.name ?? 'vault'}`}
           </Button>
         </form>
       </Card>
@@ -180,8 +264,31 @@
   <footer class="footer">
     <LockIcon size={14} />
     Encrypted locally with SQLCipher. Nothing leaves this device.
+    <Button
+      type="button"
+      variant="ghost"
+      color="secondary"
+      size="sm"
+      class="new-vault-btn"
+      onclick={() => (createModalOpen = true)}
+    >
+      {#snippet icon()}
+        <PlusIcon size={13} />
+      {/snippet}
+      New vault
+    </Button>
   </footer>
 </div>
+
+<VaultSelectionModal
+  bind:open={vaultModalOpen}
+  bind:selectedVaultId
+  bind:vaults
+  onSelect={handleVaultSelected}
+  onVaultsChanged={handleVaultsChanged}
+/>
+
+<CreateVaultModal bind:open={createModalOpen} onCreated={handleVaultCreated} />
 
 <style>
   .page {
@@ -237,12 +344,30 @@
     padding: 1.5rem;
   }
 
+  .form-head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
   .form-head h2 {
     margin: 0;
     font-size: 1.0625rem;
     font-weight: 650;
     letter-spacing: -0.015em;
     text-align: center;
+  }
+
+  .switch-vault-wrapper {
+    margin-top: 0.35rem;
+    display: flex;
+    justify-content: center;
+  }
+
+  .auth :global(.switch-vault-btn) {
+    font-size: 0.8125rem;
+    font-weight: 500;
   }
 
   .field {
@@ -288,6 +413,15 @@
     padding: 0 1.5rem 1.25rem;
     color: var(--muted-text);
     font-size: 0.72rem;
+  }
+
+  .footer :global(.new-vault-btn) {
+    font-size: 0.72rem;
+    opacity: 0.6;
+  }
+
+  .footer :global(.new-vault-btn:hover) {
+    opacity: 1;
   }
 
   :global(.theme-toggle) {

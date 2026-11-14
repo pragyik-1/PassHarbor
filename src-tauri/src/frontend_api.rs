@@ -6,20 +6,35 @@ use crate::master_key::{MIN_PASSPHRASE_LEN, MasterKey};
 use crate::prelude::*;
 use crate::state::{ActiveSession, AppState, SessionInfo};
 use secrecy::{ExposeSecret, SecretString};
+use serde::{Deserialize, Serialize};
 
 /// Name given to the vault that is created on first run.
 const DEFAULT_VAULT_NAME: &str = "Main";
 
+/// Non-secret metadata summarizing an existing vault for presentation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VaultSummary {
+    pub id: String,
+    pub name: String,
+    pub created_at: i64,
+    pub is_default: bool,
+}
+
 /// Open the vault and return session information.
 ///
-/// The vault to open is the one that was opened last; failing that, the
-/// oldest known vault; failing that, a new vault is created with the
-/// passphrase that was entered.
+/// If a specific `vault_id` is supplied, that vault is opened. Failing that,
+/// the default vault is opened; failing that, the one that was opened last;
+/// failing that, the oldest known vault; failing that, a new vault is created
+/// with the passphrase that was entered.
 ///
 /// A rejected passphrase leaves the vault locked: the previous session is
 /// closed before the passphrase is checked.
 #[tauri::command(async)]
-pub fn unlock_cmd(app: tauri::AppHandle, passphrase: SecretString) -> IPCResult<SessionInfo> {
+pub fn unlock_cmd(
+    app: tauri::AppHandle,
+    passphrase: SecretString,
+    vault_id: Option<String>,
+) -> IPCResult<SessionInfo> {
     let app_state = AppState::resolve(&app);
     app_state.check_lockout()?;
 
@@ -29,7 +44,7 @@ pub fn unlock_cmd(app: tauri::AppHandle, passphrase: SecretString) -> IPCResult<
     }
 
     let store = app_state.vault_store();
-    let (database, manifest) = match open_vault(store, &passphrase) {
+    let (database, manifest) = match open_vault(store, &passphrase, vault_id.as_deref()) {
         Ok(res) => {
             app_state.record_unlock_success();
             res
@@ -48,6 +63,7 @@ pub fn unlock_cmd(app: tauri::AppHandle, passphrase: SecretString) -> IPCResult<
     let info = SessionInfo {
         unlocked: true,
         vault_name: Some(manifest.name.clone()),
+        vault_id: Some(manifest.id.clone()),
     };
 
     let mut session = app_state.session();
@@ -58,17 +74,29 @@ pub fn unlock_cmd(app: tauri::AppHandle, passphrase: SecretString) -> IPCResult<
     Ok(info)
 }
 
-fn open_vault(store: &VaultStore, passphrase: &SecretString) -> Result<(Database, VaultManifest)> {
+fn open_vault(
+    store: &VaultStore,
+    passphrase: &SecretString,
+    vault_id: Option<&str>,
+) -> Result<(Database, VaultManifest)> {
     let passphrase = passphrase.expose_secret();
-    let (manifest, is_new) = match store.resolve_existing()? {
-        Some(manifest) => (manifest, false),
-        None => {
-            // First run
-            if passphrase.chars().count() < MIN_PASSPHRASE_LEN {
-                return Err(Error::WeakPassphrase(MIN_PASSPHRASE_LEN));
-            }
-            (VaultStore::new_manifest(DEFAULT_VAULT_NAME), true)
+    let (manifest, is_new) = match vault_id {
+        Some(id) => {
+            let manifest = store.load(id)?;
+            (manifest, false)
         }
+        None => match store.resolve_existing()? {
+            Some(manifest) => (manifest, false),
+            None => {
+                // First run
+                if passphrase.chars().count() < MIN_PASSPHRASE_LEN {
+                    return Err(Error::WeakPassphrase(MIN_PASSPHRASE_LEN));
+                }
+                let mut manifest = VaultStore::new_manifest(DEFAULT_VAULT_NAME);
+                manifest.is_default = true;
+                (manifest, true)
+            }
+        },
     };
 
     let master_key = MasterKey::from_passphrase(passphrase, &manifest.salt, &manifest.kdf)?;
@@ -93,6 +121,91 @@ fn open_vault(store: &VaultStore, passphrase: &SecretString) -> Result<(Database
     }
 
     Ok((database, manifest))
+}
+
+/// List all available vaults with their default status.
+#[tauri::command(async)]
+pub fn list_vaults_cmd(app: tauri::AppHandle) -> IPCResult<Vec<VaultSummary>> {
+    let app_state = AppState::resolve(&app);
+    let store = app_state.vault_store();
+    let manifests = store.list()?;
+    let default_id = store.default_vault()?.map(|m| m.id);
+    let summaries = manifests
+        .into_iter()
+        .map(|m| {
+            let is_default = m.is_default || default_id.as_deref() == Some(&m.id);
+            VaultSummary {
+                id: m.id,
+                name: m.name,
+                created_at: m.created_at,
+                is_default,
+            }
+        })
+        .collect();
+    Ok(summaries)
+}
+
+/// Designate a vault as the default vault.
+#[tauri::command(async)]
+pub fn set_default_vault_cmd(app: tauri::AppHandle, vault_id: String) -> IPCResult<()> {
+    let app_state = AppState::resolve(&app);
+    let store = app_state.vault_store();
+    store.set_default(&vault_id)?;
+    Ok(())
+}
+
+/// Create a new vault with its own master passphrase.
+#[tauri::command(async)]
+pub fn create_vault_cmd(
+    app: tauri::AppHandle,
+    name: String,
+    passphrase: SecretString,
+) -> IPCResult<VaultSummary> {
+    let app_state = AppState::resolve(&app);
+    let store = app_state.vault_store();
+
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err(Error::Database("Vault name cannot be empty".to_string()).into());
+    }
+    if trimmed.chars().count() > 64 {
+        return Err(Error::Database("Vault name cannot exceed 64 characters".to_string()).into());
+    }
+    let pass_len = passphrase.expose_secret().chars().count();
+    if pass_len < MIN_PASSPHRASE_LEN {
+        return Err(Error::WeakPassphrase(MIN_PASSPHRASE_LEN).into());
+    }
+
+    let is_first = store.list()?.is_empty();
+    let mut manifest = VaultStore::new_manifest(trimmed);
+    if is_first {
+        manifest.is_default = true;
+    }
+
+    let master_key =
+        MasterKey::from_passphrase(passphrase.expose_secret(), &manifest.salt, &manifest.kdf)?;
+    let db_key = DbKey::derive(&master_key, &manifest.salt)?;
+    let db_path = store.db_path(&manifest.id)?;
+
+    let database = Database::create(&db_path, &db_key)?;
+    drop(database);
+
+    if let Err(err) = store.save(&manifest) {
+        if let Err(cleanup) = std::fs::remove_file(&db_path) {
+            eprintln!(
+                "create_vault_cmd: failed to remove database {} after manifest save failed: {cleanup}",
+                db_path.display()
+            );
+        }
+        return Err(err.into());
+    }
+
+    Ok(VaultSummary {
+        id: manifest.id,
+        name: manifest.name,
+        created_at: manifest.created_at,
+        is_default: manifest.is_default,
+    })
 }
 
 /// Report the current session state (locked/unlocked and vault metadata).
@@ -259,9 +372,10 @@ mod tests {
     #[test]
     fn the_first_unlock_creates_a_vault() {
         let (_dir, store) = store();
-        let (db, manifest) = open_vault(&store, &passphrase(PASSPHRASE)).expect("unlock");
+        let (db, manifest) = open_vault(&store, &passphrase(PASSPHRASE), None).expect("unlock");
 
         assert_eq!(manifest.name, DEFAULT_VAULT_NAME);
+        assert!(manifest.is_default);
         assert!(store.db_path(&manifest.id).expect("path").exists());
         assert!(store.load(&manifest.id).is_ok());
         drop(db);
@@ -270,8 +384,9 @@ mod tests {
     #[test]
     fn unlocking_again_reopens_the_same_vault() {
         let (_dir, store) = store();
-        let (_db, first) = open_vault(&store, &passphrase(PASSPHRASE)).expect("first unlock");
-        let (_db, second) = open_vault(&store, &passphrase(PASSPHRASE)).expect("second unlock");
+        let (_db, first) = open_vault(&store, &passphrase(PASSPHRASE), None).expect("first unlock");
+        let (_db, second) =
+            open_vault(&store, &passphrase(PASSPHRASE), None).expect("second unlock");
 
         assert_eq!(first.id, second.id);
     }
@@ -279,11 +394,13 @@ mod tests {
     #[test]
     fn a_wrong_passphrase_is_rejected() {
         let (_dir, store) = store();
-        let (_db, _manifest) = open_vault(&store, &passphrase(PASSPHRASE)).expect("first unlock");
+        let (_db, _manifest) =
+            open_vault(&store, &passphrase(PASSPHRASE), None).expect("first unlock");
 
         let err = expect_err(open_vault(
             &store,
             &passphrase("wrong horse battery staple"),
+            None,
         ));
         assert!(matches!(err, Error::InvalidMasterKey));
     }
@@ -291,17 +408,65 @@ mod tests {
     #[test]
     fn a_short_passphrase_is_rejected_on_first_run() {
         let (_dir, store) = store();
-        let err = expect_err(open_vault(&store, &passphrase("short")));
+        let err = expect_err(open_vault(&store, &passphrase("short"), None));
         assert!(matches!(err, Error::WeakPassphrase(_)));
     }
 
     #[test]
     fn a_lost_database_is_reported_instead_of_replaced() {
         let (_dir, store) = store();
-        let (_db, manifest) = open_vault(&store, &passphrase(PASSPHRASE)).expect("first unlock");
+        let (_db, manifest) =
+            open_vault(&store, &passphrase(PASSPHRASE), None).expect("first unlock");
         fs::remove_file(store.db_path(&manifest.id).expect("path")).expect("remove database");
 
-        let err = expect_err(open_vault(&store, &passphrase(PASSPHRASE)));
+        let err = expect_err(open_vault(&store, &passphrase(PASSPHRASE), None));
+        assert!(matches!(err, Error::Database(_)));
+    }
+
+    #[test]
+    fn unlocking_a_specific_vault_by_id() {
+        let (_dir, store) = store();
+        let (_db, main) = open_vault(&store, &passphrase(PASSPHRASE), None).expect("first unlock");
+
+        let work_manifest = VaultStore::new_manifest("Work");
+        let work_key = MasterKey::from_passphrase(
+            "work passphrase 123",
+            &work_manifest.salt,
+            &work_manifest.kdf,
+        )
+        .expect("key");
+        let work_db_key = DbKey::derive(&work_key, &work_manifest.salt).expect("derive");
+        let work_path = store.db_path(&work_manifest.id).expect("path");
+        let db = Database::create(&work_path, &work_db_key).expect("create");
+        drop(db);
+        store.save(&work_manifest).expect("save");
+
+        let (_db, unlocked) = open_vault(
+            &store,
+            &passphrase("work passphrase 123"),
+            Some(&work_manifest.id),
+        )
+        .expect("unlock work");
+        assert_eq!(unlocked.id, work_manifest.id);
+        assert_eq!(unlocked.name, "Work");
+        assert_ne!(unlocked.id, main.id);
+    }
+
+    #[test]
+    fn unlocking_with_invalid_vault_id_format_fails() {
+        let (_dir, store) = store();
+        let err = expect_err(open_vault(&store, &passphrase(PASSPHRASE), Some("bad_id")));
+        assert!(matches!(err, Error::InvalidVaultId(_)));
+    }
+
+    #[test]
+    fn unlocking_with_nonexistent_vault_id_fails() {
+        let (_dir, store) = store();
+        let err = expect_err(open_vault(
+            &store,
+            &passphrase(PASSPHRASE),
+            Some("0123456789abcdef"),
+        ));
         assert!(matches!(err, Error::Database(_)));
     }
 }

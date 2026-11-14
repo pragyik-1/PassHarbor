@@ -9,6 +9,7 @@ use crate::database::{Database, VaultManifest, VaultStore};
 pub struct SessionInfo {
     pub unlocked: bool,
     pub vault_name: Option<String>,
+    pub vault_id: Option<String>,
 }
 
 pub struct ActiveSession {
@@ -69,10 +70,12 @@ impl AppState {
             Some(active) => SessionInfo {
                 unlocked: true,
                 vault_name: Some(active.manifest.name.clone()),
+                vault_id: Some(active.manifest.id.clone()),
             },
             None => SessionInfo {
                 unlocked: false,
                 vault_name: None,
+                vault_id: None,
             },
         }
     }

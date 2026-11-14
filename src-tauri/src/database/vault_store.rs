@@ -27,6 +27,9 @@ pub struct VaultManifest {
     /// When the vault was created, in seconds since the Unix epoch.
     #[serde(default)]
     pub created_at: i64,
+    /// Whether this vault is designated as the default vault.
+    #[serde(default)]
+    pub is_default: bool,
 }
 
 /// Locates vaults on disk: one directory containing one `<id>.json` manifest
@@ -60,6 +63,7 @@ impl VaultStore {
             salt: rand::random(),
             kdf: KdfParams::default(),
             created_at: now_unix(),
+            is_default: false,
         }
     }
 
@@ -79,15 +83,42 @@ impl VaultStore {
         Ok(())
     }
 
-    /// The vault to open: the one that was opened last, failing that the
-    /// oldest known vault.
-    pub fn resolve_existing(&self) -> Result<Option<VaultManifest>> {
+    /// The vault designated as default. If no vault has `is_default: true`,
+    /// falls back to the vault that was opened last, failing that the oldest known vault.
+    pub fn default_vault(&self) -> Result<Option<VaultManifest>> {
+        let manifests = self.list()?;
+        if let Some(m) = manifests.iter().find(|m| m.is_default) {
+            return Ok(Some(m.clone()));
+        }
         if let Some(id) = self.last_opened()
             && let Ok(manifest) = self.load(&id)
         {
             return Ok(Some(manifest));
         }
-        Ok(self.list()?.into_iter().next())
+        Ok(manifests.into_iter().next())
+    }
+
+    /// Designate a vault as default, unsetting the flag on all other vaults.
+    pub fn set_default(&self, id: &str) -> Result<()> {
+        validate_id(id)?;
+        let manifests = self.list()?;
+        if !manifests.iter().any(|m| m.id == id) {
+            return Err(Error::Database(format!("Vault not found: {id}")));
+        }
+        for mut manifest in manifests {
+            let should_be_default = manifest.id == id;
+            if manifest.is_default != should_be_default {
+                manifest.is_default = should_be_default;
+                self.save(&manifest)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// The vault to open: the default vault; failing that the one that was
+    /// opened last, failing that the oldest known vault.
+    pub fn resolve_existing(&self) -> Result<Option<VaultManifest>> {
+        self.default_vault()
     }
 
     /// Read the manifest of a single vault.
@@ -238,6 +269,44 @@ mod tests {
         store.set_last_opened(&second.id).expect("record");
         let resolved = store.resolve_existing().expect("resolve").expect("a vault");
         assert_eq!(resolved.id, second.id);
+    }
+
+    #[test]
+    fn the_default_vault_takes_precedence_over_last_opened() {
+        let (_dir, store) = store();
+        let first = create(&store, "First");
+        let second = create(&store, "Second");
+
+        store.set_default(&first.id).expect("set default");
+        store
+            .set_last_opened(&second.id)
+            .expect("record last opened");
+
+        let resolved = store.resolve_existing().expect("resolve").expect("a vault");
+        assert_eq!(resolved.id, first.id);
+    }
+
+    #[test]
+    fn setting_a_new_default_unsets_the_previous_default() {
+        let (_dir, store) = store();
+        let first = create(&store, "First");
+        let second = create(&store, "Second");
+
+        store.set_default(&first.id).expect("set first as default");
+        assert!(store.load(&first.id).expect("load").is_default);
+        assert!(!store.load(&second.id).expect("load").is_default);
+
+        store
+            .set_default(&second.id)
+            .expect("set second as default");
+        assert!(!store.load(&first.id).expect("load").is_default);
+        assert!(store.load(&second.id).expect("load").is_default);
+    }
+
+    #[test]
+    fn setting_nonexistent_vault_as_default_fails() {
+        let (_dir, store) = store();
+        assert!(store.set_default("0123456789abcdef").is_err());
     }
 
     #[test]
