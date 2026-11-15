@@ -19,6 +19,7 @@ export interface VaultSummary {
   name: string
   created_at: number
   is_default: boolean
+  keychain_enabled: boolean
 }
 
 export interface Entry {
@@ -98,6 +99,28 @@ export async function unlock(passphrase: string, vaultId?: string | null): Promi
     passphrase,
     vaultId: vaultId ?? null,
   })
+}
+
+/** Unlock a vault using the database key saved in the OS keychain. */
+export async function unlockWithKeychain(vaultId?: string | null): Promise<SessionInfo> {
+  return await invoke<SessionInfo>('unlock_with_keychain_cmd', {
+    vaultId: vaultId ?? null,
+  })
+}
+
+/** Store the active vault's database key in the OS keychain. */
+export async function enableKeychain(passphrase: string): Promise<void> {
+  await invoke<void>('enable_keychain_cmd', { passphrase })
+}
+
+/** Remove the active vault's database key from the OS keychain. */
+export async function disableKeychain(): Promise<void> {
+  await invoke<void>('disable_keychain_cmd')
+}
+
+/** Whether the platform credential store can be reached. */
+export async function keychainAvailable(): Promise<boolean> {
+  return await invoke<boolean>('keychain_available_cmd')
 }
 
 /** List all known vaults with their default status. */
@@ -187,4 +210,14 @@ export function isEntryNotFoundError(error: unknown): boolean {
 /** Whether an IPC failure indicates rate-limit lockout due to too many failed unlock attempts. */
 export function isTooManyAttemptsError(error: unknown): boolean {
   return String(error).includes('Too many failed attempts')
+}
+
+/** Whether the OS keychain cannot be reached on this system. */
+export function isKeychainUnavailableError(error: unknown): boolean {
+  return String(error).includes('System keychain is unavailable')
+}
+
+/** Whether a saved keychain entry is missing or no longer opens the vault. */
+export function isKeychainStaleError(error: unknown): boolean {
+  return String(error).includes('Saved keychain entry could not unlock this vault')
 }

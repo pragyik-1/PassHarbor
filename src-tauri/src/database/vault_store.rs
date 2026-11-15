@@ -30,6 +30,10 @@ pub struct VaultManifest {
     /// Whether this vault is designated as the default vault.
     #[serde(default)]
     pub is_default: bool,
+    /// Whether the database key is stored in the OS keychain for unlock.
+    /// Absent in manifests written before keychain support; defaults to off.
+    #[serde(default)]
+    pub keychain_enabled: bool,
 }
 
 /// Locates vaults on disk: one directory containing one `<id>.json` manifest
@@ -64,6 +68,7 @@ impl VaultStore {
             kdf: KdfParams::default(),
             created_at: now_unix(),
             is_default: false,
+            keychain_enabled: false,
         }
     }
 
@@ -257,6 +262,31 @@ mod tests {
         let loaded = store.load(&manifest.id).expect("load");
         assert_eq!(loaded.id, manifest.id);
         assert_eq!(loaded.salt, manifest.salt);
+        assert!(!loaded.keychain_enabled);
+    }
+
+    #[test]
+    fn a_manifest_without_keychain_state_disables_it() {
+        let (dir, store) = store();
+        create_private_dir(dir.path()).expect("create vault directory");
+        fs::write(
+            dir.path().join("0123456789abcdef.json"),
+            br#"{"id":"0123456789abcdef","name":"Old","salt":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}"#,
+        )
+        .expect("write");
+
+        let loaded = store.load("0123456789abcdef").expect("load");
+        assert!(!loaded.keychain_enabled);
+    }
+
+    #[test]
+    fn keychain_state_survives_a_manifest_round_trip() {
+        let (_dir, store) = store();
+        let mut manifest = create(&store, "My Vault");
+        manifest.keychain_enabled = true;
+        store.save(&manifest).expect("save");
+
+        assert!(store.load(&manifest.id).expect("load").keychain_enabled);
     }
 
     #[test]

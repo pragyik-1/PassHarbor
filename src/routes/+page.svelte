@@ -4,9 +4,12 @@
   import { Button, Card, Input } from '@hermitk/bluenite'
   import {
     unlock,
+    unlockWithKeychain,
     getSession,
     listVaults,
     isInvalidMasterKeyError,
+    isKeychainStaleError,
+    isKeychainUnavailableError,
     isTooManyAttemptsError,
     type VaultSummary,
   } from '#lib/api.ts'
@@ -23,13 +26,16 @@
   import ThemeToggle from '#lib/components/ThemeToggle.svelte'
   import VaultSelectionModal from '#lib/components/VaultSelectionModal.svelte'
   import CreateVaultModal from '#lib/components/CreateVaultModal.svelte'
+  import { clearManualLock, isManualLockPending } from '#lib/utils.svelte.ts'
 
   let passphrase = $state('')
   let error = $state('')
+  let keychainNotice = $state('')
   let busy = $state(false)
   let showPassphrase = $state(false)
   let capsLock = $state(false)
   let passphraseInput = $state<HTMLInputElement | null>(null)
+  let manualLockPending = $state(isManualLockPending())
 
   let lockoutRemaining = $state(0)
   let lockoutInterval: ReturnType<typeof setInterval> | null = null
@@ -41,6 +47,48 @@
   let createModalOpen = $state(false)
 
   const selectedVault = $derived(vaults.find((v) => v.id === selectedVaultId) ?? null)
+
+  const passphraseHelper = $derived(
+    vaults.length === 0
+      ? "If this is your first time here, this will be your master passphrase and it can't be recovered."
+      : manualLockPending
+        ? 'Vault locked. Enter your master passphrase to unlock it.'
+        : selectedVault?.keychain_enabled
+          ? 'Keychain unlock is enabled. Leave this empty and press Unlock to use it, or enter the master passphrase.'
+          : `Enter the master passphrase for ${selectedVault?.name ?? 'this vault'}.`,
+  )
+
+  async function tryKeychainUnlock(vaultId: string | null): Promise<boolean> {
+    if (vaultId === null || busy) return false
+    const vault = vaults.find((v) => v.id === vaultId)
+    if (!vault?.keychain_enabled) return false
+
+    error = ''
+    keychainNotice = ''
+    busy = true
+    try {
+      await unlockWithKeychain(vaultId)
+      clearManualLock()
+      manualLockPending = false
+      passphrase = ''
+      await goto('/dashboard', { replace: true })
+      return true
+    } catch (cause) {
+      if (isKeychainStaleError(cause)) {
+        keychainNotice =
+          'The saved keychain entry is no longer valid. Enter your master passphrase.'
+        vaults = vaults.map((v) => (v.id === vaultId ? { ...v, keychain_enabled: false } : v))
+      } else if (isKeychainUnavailableError(cause)) {
+        keychainNotice = 'The system keychain is unavailable. Enter your master passphrase.'
+      } else {
+        error = describeError(cause)
+      }
+      passphraseInput?.focus()
+      return false
+    } finally {
+      busy = false
+    }
+  }
 
   function startLockoutCountdown(seconds: number) {
     if (lockoutInterval !== null) clearInterval(lockoutInterval)
@@ -75,6 +123,10 @@
       if (defaultVault) {
         selectedVaultId = defaultVault.id
       }
+      if (!manualLockPending && defaultVault?.keychain_enabled) {
+        const unlocked = await tryKeychainUnlock(defaultVault.id)
+        if (unlocked) return
+      }
       if (vaults.length > 1) {
         vaultModalOpen = true
       }
@@ -107,8 +159,13 @@
   function handleVaultSelected(vault: VaultSummary) {
     selectedVaultId = vault.id
     error = ''
+    keychainNotice = ''
     passphrase = ''
-    setTimeout(() => passphraseInput?.focus(), 50)
+    if (!manualLockPending && vault.keychain_enabled) {
+      void tryKeychainUnlock(vault.id)
+    } else {
+      setTimeout(() => passphraseInput?.focus(), 50)
+    }
   }
 
   function handleVaultsChanged(updated: VaultSummary[]) {
@@ -133,17 +190,30 @@
 
   async function submit(event: SubmitEvent) {
     event.preventDefault()
-    if (busy || isLockedOut) return
+    if (busy) return
+
     if (passphrase.length === 0) {
-      error = 'Enter your master passphrase.'
+      if (!manualLockPending && selectedVault?.keychain_enabled) {
+        const unlocked = await tryKeychainUnlock(selectedVaultId)
+        if (unlocked) return
+      }
+      if (isLockedOut) return
+      if (keychainNotice === '') {
+        error = 'Enter your master passphrase.'
+      }
       passphraseInput?.focus()
       return
     }
 
+    if (isLockedOut) return
+
     error = ''
+    keychainNotice = ''
     busy = true
     try {
       await unlock(passphrase, selectedVaultId)
+      clearManualLock()
+      manualLockPending = false
       passphrase = ''
       await goto('/dashboard', { replace: true })
     } catch (cause) {
@@ -231,9 +301,7 @@
               bind:ref={passphraseInput}
               bind:value={passphrase}
               class="login-input"
-              helperText={vaults.length === 0
-                ? "If this is your first time here, this will be your master passphrase and it can't be recovered."
-                : `Enter the master passphrase for ${selectedVault?.name ?? 'this vault'}.`}
+              helperText={passphraseHelper}
               type={showPassphrase ? 'text' : 'password'}
               placeholder="Enter your master passphrase"
               disabled={busy}
@@ -249,6 +317,13 @@
               <p class="caps-warning" role="status">
                 <TriangleAlertIcon size={14} />
                 Caps Lock is on
+              </p>
+            {/if}
+
+            {#if keychainNotice}
+              <p class="keychain-notice" role="status">
+                <KeyRoundIcon size={14} />
+                {keychainNotice}
               </p>
             {/if}
           </div>
@@ -403,6 +478,16 @@
     color: var(--warn);
     font-size: 0.75rem;
     font-weight: 500;
+  }
+
+  .keychain-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.5rem 0 0;
+    color: var(--muted-text);
+    font-size: 0.75rem;
+    line-height: 1.4;
   }
 
   .footer {

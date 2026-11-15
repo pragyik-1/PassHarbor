@@ -3,6 +3,7 @@ use tauri::Manager;
 mod database;
 pub mod error;
 mod frontend_api;
+mod keychain;
 mod master_key;
 pub mod prelude;
 mod state;
@@ -17,6 +18,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             frontend_api::unlock_cmd,
+            frontend_api::unlock_with_keychain_cmd,
+            frontend_api::enable_keychain_cmd,
+            frontend_api::disable_keychain_cmd,
+            frontend_api::keychain_available_cmd,
             frontend_api::lock_cmd,
             frontend_api::get_session_cmd,
             frontend_api::list_vaults_cmd,

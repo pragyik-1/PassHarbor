@@ -18,6 +18,7 @@
   } from '#lib/api.ts'
   import type { EntrySummary, EntryDetail, NewEntry, UpdateEntry, KindCount } from '#lib/api.ts'
   import { DEFAULT_KINDS, mergeKinds } from '#lib/kinds.ts'
+  import { markManualLock } from '#lib/utils.svelte.ts'
   import type { SortKey } from '#lib/components/dashboard/EntryList.svelte'
 
   import AppShell from '#lib/components/dashboard/AppShell.svelte'
@@ -187,6 +188,7 @@
     lockError = ''
     try {
       await lock()
+      markManualLock()
       await goto('/', { replace: true })
     } catch (err) {
       lockError = String(err)

@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use crate::database::{
     Database, DbKey, Entry, EntryDetail, EntryQuery, EntryQueryResult, NewEntry, UpdateEntry,
     VaultManifest, VaultStore,
 };
+use crate::keychain::{self, CredentialStore};
 use crate::master_key::{MIN_PASSPHRASE_LEN, MasterKey};
 use crate::prelude::*;
 use crate::state::{ActiveSession, AppState, SessionInfo};
@@ -18,6 +21,7 @@ pub struct VaultSummary {
     pub name: String,
     pub created_at: i64,
     pub is_default: bool,
+    pub keychain_enabled: bool,
 }
 
 /// Open the vault and return session information.
@@ -44,7 +48,7 @@ pub fn unlock_cmd(
     }
 
     let store = app_state.vault_store();
-    let (database, manifest) = match open_vault(store, &passphrase, vault_id.as_deref()) {
+    let (database, manifest, db_key) = match open_vault(store, &passphrase, vault_id.as_deref()) {
         Ok(res) => {
             app_state.record_unlock_success();
             res
@@ -70,15 +74,148 @@ pub fn unlock_cmd(
     *session = Some(ActiveSession {
         db: database,
         manifest,
+        key: Arc::new(db_key),
     });
     Ok(info)
+}
+
+/// Unlock the vault using the database key saved in the OS keychain.
+///
+/// This bypasses the passphrase lockout: the keychain is possession-based, and
+/// a missing or stale entry is not a passphrase guess. A successful unlock
+/// still clears any lockout left by earlier passphrase attempts.
+#[tauri::command(async)]
+pub fn unlock_with_keychain_cmd(
+    app: tauri::AppHandle,
+    vault_id: Option<String>,
+) -> IPCResult<SessionInfo> {
+    let app_state = AppState::resolve(&app);
+
+    {
+        let mut session = app_state.session();
+        *session = None;
+    }
+
+    let store = app_state.vault_store();
+    let manifest = match resolve_existing_manifest(store, vault_id.as_deref())? {
+        Some(manifest) => manifest,
+        None => {
+            return Err(Error::Keychain("No vault is available to unlock".to_string()).into());
+        }
+    };
+
+    if !manifest.keychain_enabled {
+        return Err(
+            Error::Keychain("Keychain unlock is not enabled for this vault".to_string()).into(),
+        );
+    }
+
+    let (database, db_key) = unlock_from_keychain(store, &manifest, &keychain::SystemKeychain)?;
+    store.set_last_opened(&manifest.id)?;
+    app_state.record_unlock_success();
+
+    let info = SessionInfo {
+        unlocked: true,
+        vault_name: Some(manifest.name.clone()),
+        vault_id: Some(manifest.id.clone()),
+    };
+
+    let mut session = app_state.session();
+    *session = Some(ActiveSession {
+        db: database,
+        manifest,
+        key: Arc::new(db_key),
+    });
+    Ok(info)
+}
+
+/// Store the active vault's database key in the OS keychain.
+///
+/// The passphrase is required again so enabling keychain unlock cannot happen
+/// from an unattended, already-unlocked session without the user's consent.
+/// Failed re-auth is throttled like a normal unlock attempt.
+#[tauri::command(async)]
+pub fn enable_keychain_cmd(app: tauri::AppHandle, passphrase: SecretString) -> IPCResult<()> {
+    let app_state = AppState::resolve(&app);
+    app_state.check_lockout()?;
+
+    let (manifest, session_key) = {
+        let session = app_state.session();
+        let active = session.as_ref().ok_or(Error::VaultLocked)?;
+        (active.manifest.clone(), Arc::clone(&active.key))
+    };
+
+    keychain::ensure_available(&keychain::SystemKeychain)?;
+
+    let master_key =
+        MasterKey::from_passphrase(passphrase.expose_secret(), &manifest.salt, &manifest.kdf)?;
+    let derived = DbKey::derive(&master_key, &manifest.salt)?;
+    if derived.as_bytes() != session_key.as_bytes() {
+        if let Some(delay) = app_state.record_unlock_failure() {
+            return Err(Error::TooManyAttempts(delay).into());
+        }
+        return Err(Error::InvalidMasterKey.into());
+    }
+    app_state.record_unlock_success();
+
+    keychain::save_db_key(&keychain::SystemKeychain, &manifest.id, &session_key)?;
+
+    let mut updated = manifest.clone();
+    updated.keychain_enabled = true;
+    if let Err(err) = app_state.vault_store().save(&updated) {
+        if let Err(cleanup) = keychain::delete_db_key(&keychain::SystemKeychain, &manifest.id) {
+            eprintln!(
+                "enable_keychain_cmd: failed to remove keychain entry for vault {} after manifest save failed: {cleanup}",
+                manifest.id
+            );
+        }
+        return Err(err.into());
+    }
+
+    let mut session = app_state.session();
+    if let Some(active) = session.as_mut()
+        && active.manifest.id == manifest.id
+    {
+        active.manifest.keychain_enabled = true;
+    }
+    Ok(())
+}
+
+/// Remove the active vault's database key from the OS keychain.
+#[tauri::command(async)]
+pub fn disable_keychain_cmd(app: tauri::AppHandle) -> IPCResult<()> {
+    let app_state = AppState::resolve(&app);
+    let manifest = {
+        let session = app_state.session();
+        session.as_ref().ok_or(Error::VaultLocked)?.manifest.clone()
+    };
+
+    keychain::delete_db_key(&keychain::SystemKeychain, &manifest.id)?;
+
+    let mut updated = manifest.clone();
+    updated.keychain_enabled = false;
+    app_state.vault_store().save(&updated)?;
+
+    let mut session = app_state.session();
+    if let Some(active) = session.as_mut()
+        && active.manifest.id == manifest.id
+    {
+        active.manifest.keychain_enabled = false;
+    }
+    Ok(())
+}
+
+/// Whether the platform credential store can be reached.
+#[tauri::command(async)]
+pub fn keychain_available_cmd() -> IPCResult<bool> {
+    Ok(keychain::is_available(&keychain::SystemKeychain))
 }
 
 fn open_vault(
     store: &VaultStore,
     passphrase: &SecretString,
     vault_id: Option<&str>,
-) -> Result<(Database, VaultManifest)> {
+) -> Result<(Database, VaultManifest, DbKey)> {
     let passphrase = passphrase.expose_secret();
     let (manifest, is_new) = match vault_id {
         Some(id) => {
@@ -101,15 +238,25 @@ fn open_vault(
 
     let master_key = MasterKey::from_passphrase(passphrase, &manifest.salt, &manifest.kdf)?;
     let db_key = DbKey::derive(&master_key, &manifest.salt)?;
-    let db_path = store.db_path(&manifest.id)?;
+    let database = open_database(store, &manifest, &db_key, is_new)?;
 
+    Ok((database, manifest, db_key))
+}
+
+fn open_database(
+    store: &VaultStore,
+    manifest: &VaultManifest,
+    db_key: &DbKey,
+    is_new: bool,
+) -> Result<Database> {
+    let db_path = store.db_path(&manifest.id)?;
     let database = if is_new {
-        Database::create(&db_path, &db_key)?
+        Database::create(&db_path, db_key)?
     } else {
-        Database::open(&db_path, &db_key)?
+        Database::open(&db_path, db_key)?
     };
 
-    if is_new && let Err(err) = store.save(&manifest) {
+    if is_new && let Err(err) = store.save(manifest) {
         drop(database);
         if let Err(cleanup) = std::fs::remove_file(&db_path) {
             eprintln!(
@@ -120,7 +267,66 @@ fn open_vault(
         return Err(err);
     }
 
-    Ok((database, manifest))
+    Ok(database)
+}
+
+fn resolve_existing_manifest(
+    store: &VaultStore,
+    vault_id: Option<&str>,
+) -> Result<Option<VaultManifest>> {
+    match vault_id {
+        Some(id) => Ok(Some(store.load(id)?)),
+        None => store.resolve_existing(),
+    }
+}
+
+/// Open an existing vault with a key loaded from the keychain.
+fn unlock_from_keychain(
+    store: &VaultStore,
+    manifest: &VaultManifest,
+    credentials: &dyn CredentialStore,
+) -> Result<(Database, DbKey)> {
+    if !manifest.keychain_enabled {
+        return Err(Error::Keychain(
+            "Keychain unlock is not enabled for this vault".to_string(),
+        ));
+    }
+
+    let db_key = match keychain::load_db_key(credentials, &manifest.id)? {
+        Some(key) => key,
+        None => {
+            mark_keychain_stale(store, manifest, credentials)?;
+            return Err(Error::KeychainStale);
+        }
+    };
+
+    match open_database(store, manifest, &db_key, false) {
+        Ok(database) => Ok((database, db_key)),
+        Err(Error::InvalidMasterKey) => {
+            mark_keychain_stale(store, manifest, credentials)?;
+            Err(Error::KeychainStale)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+/// Turn keychain unlock off after the saved key no longer opens the vault.
+fn mark_keychain_stale(
+    store: &VaultStore,
+    manifest: &VaultManifest,
+    credentials: &dyn CredentialStore,
+) -> Result<()> {
+    let mut updated = manifest.clone();
+    updated.keychain_enabled = false;
+    store.save(&updated)?;
+
+    if let Err(err) = keychain::delete_db_key(credentials, &manifest.id) {
+        eprintln!(
+            "keychain: failed to delete stale credential for vault {}: {err}",
+            manifest.id
+        );
+    }
+    Ok(())
 }
 
 /// List all available vaults with their default status.
@@ -139,6 +345,7 @@ pub fn list_vaults_cmd(app: tauri::AppHandle) -> IPCResult<Vec<VaultSummary>> {
                 name: m.name,
                 created_at: m.created_at,
                 is_default,
+                keychain_enabled: m.keychain_enabled,
             }
         })
         .collect();
@@ -205,6 +412,7 @@ pub fn create_vault_cmd(
         name: manifest.name,
         created_at: manifest.created_at,
         is_default: manifest.is_default,
+        keychain_enabled: manifest.keychain_enabled,
     })
 }
 
@@ -326,6 +534,7 @@ pub fn list_custom_kinds_cmd(app: tauri::AppHandle) -> IPCResult<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::keychain::MemoryKeychain;
     use std::fs;
     use std::path::{Path, PathBuf};
 
@@ -362,7 +571,7 @@ mod tests {
         (dir, store)
     }
 
-    fn expect_err(result: Result<(Database, VaultManifest)>) -> Error {
+    fn expect_err(result: Result<(Database, VaultManifest, DbKey)>) -> Error {
         match result {
             Ok(_) => panic!("unlocking should have failed"),
             Err(err) => err,
@@ -372,7 +581,8 @@ mod tests {
     #[test]
     fn the_first_unlock_creates_a_vault() {
         let (_dir, store) = store();
-        let (db, manifest) = open_vault(&store, &passphrase(PASSPHRASE), None).expect("unlock");
+        let (db, manifest, _key) =
+            open_vault(&store, &passphrase(PASSPHRASE), None).expect("unlock");
 
         assert_eq!(manifest.name, DEFAULT_VAULT_NAME);
         assert!(manifest.is_default);
@@ -384,8 +594,9 @@ mod tests {
     #[test]
     fn unlocking_again_reopens_the_same_vault() {
         let (_dir, store) = store();
-        let (_db, first) = open_vault(&store, &passphrase(PASSPHRASE), None).expect("first unlock");
-        let (_db, second) =
+        let (_db, first, _key) =
+            open_vault(&store, &passphrase(PASSPHRASE), None).expect("first unlock");
+        let (_db, second, _key) =
             open_vault(&store, &passphrase(PASSPHRASE), None).expect("second unlock");
 
         assert_eq!(first.id, second.id);
@@ -394,7 +605,7 @@ mod tests {
     #[test]
     fn a_wrong_passphrase_is_rejected() {
         let (_dir, store) = store();
-        let (_db, _manifest) =
+        let (_db, _manifest, _key) =
             open_vault(&store, &passphrase(PASSPHRASE), None).expect("first unlock");
 
         let err = expect_err(open_vault(
@@ -415,7 +626,7 @@ mod tests {
     #[test]
     fn a_lost_database_is_reported_instead_of_replaced() {
         let (_dir, store) = store();
-        let (_db, manifest) =
+        let (_db, manifest, _key) =
             open_vault(&store, &passphrase(PASSPHRASE), None).expect("first unlock");
         fs::remove_file(store.db_path(&manifest.id).expect("path")).expect("remove database");
 
@@ -426,7 +637,8 @@ mod tests {
     #[test]
     fn unlocking_a_specific_vault_by_id() {
         let (_dir, store) = store();
-        let (_db, main) = open_vault(&store, &passphrase(PASSPHRASE), None).expect("first unlock");
+        let (_db, main, _key) =
+            open_vault(&store, &passphrase(PASSPHRASE), None).expect("first unlock");
 
         let work_manifest = VaultStore::new_manifest("Work");
         let work_key = MasterKey::from_passphrase(
@@ -441,7 +653,7 @@ mod tests {
         drop(db);
         store.save(&work_manifest).expect("save");
 
-        let (_db, unlocked) = open_vault(
+        let (_db, unlocked, _key) = open_vault(
             &store,
             &passphrase("work passphrase 123"),
             Some(&work_manifest.id),
@@ -468,5 +680,98 @@ mod tests {
             Some("0123456789abcdef"),
         ));
         assert!(matches!(err, Error::Database(_)));
+    }
+
+    fn expect_keychain_err(result: Result<(Database, DbKey)>) -> Error {
+        match result {
+            Ok(_) => panic!("keychain unlock should have failed"),
+            Err(err) => err,
+        }
+    }
+
+    #[test]
+    fn a_keychain_stored_key_opens_the_same_vault() {
+        let (_dir, store) = store();
+        let (db, mut manifest, key) =
+            open_vault(&store, &passphrase(PASSPHRASE), None).expect("unlock");
+        drop(db);
+
+        manifest.keychain_enabled = true;
+        store.save(&manifest).expect("save");
+        let credentials = MemoryKeychain::new();
+        keychain::save_db_key(&credentials, &manifest.id, &key).expect("save keychain");
+
+        let (_db, loaded) =
+            unlock_from_keychain(&store, &manifest, &credentials).expect("keychain unlock");
+        assert_eq!(loaded.as_bytes(), key.as_bytes());
+    }
+
+    #[test]
+    fn a_wrong_keychain_key_is_treated_as_stale() {
+        let (_dir, store) = store();
+        let (db, mut manifest, _key) =
+            open_vault(&store, &passphrase(PASSPHRASE), None).expect("unlock");
+        drop(db);
+
+        manifest.keychain_enabled = true;
+        store.save(&manifest).expect("save");
+        let credentials = MemoryKeychain::new();
+        let wrong = DbKey::from_bytes([99u8; 32]);
+        keychain::save_db_key(&credentials, &manifest.id, &wrong).expect("save keychain");
+
+        let err = expect_keychain_err(unlock_from_keychain(&store, &manifest, &credentials));
+        assert!(matches!(err, Error::KeychainStale));
+        assert!(!store.load(&manifest.id).expect("load").keychain_enabled);
+        assert!(
+            keychain::load_db_key(&credentials, &manifest.id)
+                .expect("load keychain")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn a_missing_keychain_key_disables_keychain_unlock() {
+        let (_dir, store) = store();
+        let (db, mut manifest, _key) =
+            open_vault(&store, &passphrase(PASSPHRASE), None).expect("unlock");
+        drop(db);
+
+        manifest.keychain_enabled = true;
+        store.save(&manifest).expect("save");
+        let credentials = MemoryKeychain::new();
+
+        let err = expect_keychain_err(unlock_from_keychain(&store, &manifest, &credentials));
+        assert!(matches!(err, Error::KeychainStale));
+        assert!(!store.load(&manifest.id).expect("load").keychain_enabled);
+    }
+
+    #[test]
+    fn an_unavailable_keychain_does_not_disable_keychain_unlock() {
+        let (_dir, store) = store();
+        let (db, mut manifest, _key) =
+            open_vault(&store, &passphrase(PASSPHRASE), None).expect("unlock");
+        drop(db);
+
+        manifest.keychain_enabled = true;
+        store.save(&manifest).expect("save");
+        let credentials = MemoryKeychain::unavailable();
+
+        let err = expect_keychain_err(unlock_from_keychain(&store, &manifest, &credentials));
+        assert!(matches!(err, Error::KeychainUnavailable));
+        assert!(store.load(&manifest.id).expect("load").keychain_enabled);
+    }
+
+    #[test]
+    fn keychain_unlock_requires_an_enabled_manifest() {
+        let (_dir, store) = store();
+        let (db, manifest, key) =
+            open_vault(&store, &passphrase(PASSPHRASE), None).expect("unlock");
+        drop(db);
+
+        let credentials = MemoryKeychain::new();
+        keychain::save_db_key(&credentials, &manifest.id, &key).expect("save keychain");
+
+        let err = expect_keychain_err(unlock_from_keychain(&store, &manifest, &credentials));
+        assert!(matches!(err, Error::Keychain(_)));
     }
 }

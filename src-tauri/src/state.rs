@@ -1,9 +1,9 @@
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use serde::Serialize;
 use tauri::{Manager, State};
 
-use crate::database::{Database, VaultManifest, VaultStore};
+use crate::database::{Database, DbKey, VaultManifest, VaultStore};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SessionInfo {
@@ -15,6 +15,9 @@ pub struct SessionInfo {
 pub struct ActiveSession {
     pub db: Database,
     pub manifest: VaultManifest,
+    /// The database key, retained while unlocked so keychain opt-in can verify
+    /// and store it without reopening the database.
+    pub key: Arc<DbKey>,
 }
 
 const THROTTLE_THRESHOLD: u32 = 5;

@@ -20,6 +20,12 @@ pub enum Error {
     InvalidEntry(String),
     #[error("Too many failed attempts. Please try again after {0} seconds")]
     TooManyAttempts(u64),
+    #[error("System keychain is unavailable")]
+    KeychainUnavailable,
+    #[error("Saved keychain entry could not unlock this vault")]
+    KeychainStale,
+    #[error("Keychain error: {0}")]
+    Keychain(String),
 }
 
 impl Error {

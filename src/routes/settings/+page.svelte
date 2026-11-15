@@ -1,7 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
-  import { Badge, Button, Input, Card, Switch, toast, theme, toggleTheme } from '@hermitk/bluenite'
+  import {
+    Badge,
+    Button,
+    Input,
+    Card,
+    Modal,
+    Switch,
+    toast,
+    theme,
+    toggleTheme,
+  } from '@hermitk/bluenite'
   import {
     ArrowLeftIcon,
     PlusIcon,
@@ -24,12 +34,18 @@
     resetCustomKinds,
     listVaults,
     setDefaultVault,
+    enableKeychain,
+    disableKeychain,
+    keychainAvailable as checkKeychainAvailable,
     isVaultLockedError,
+    isInvalidMasterKeyError,
     type KindCount,
     type VaultSummary,
   } from '#lib/api.ts'
   import { timeAgo } from '#lib/time.ts'
+  import { markManualLock } from '#lib/utils.svelte.ts'
   import CreateVaultModal from '#lib/components/CreateVaultModal.svelte'
+  import DialogActions from '#lib/components/dashboard/DialogActions.svelte'
 
   let vaultName = $state<string | null>(null)
   let savedCustomKinds = $state<string[]>([])
@@ -42,10 +58,20 @@
   let defaultBusyId = $state<string | null>(null)
   let createVaultOpen = $state(false)
 
+  let activeVaultId = $state<string | null>(null)
+  let keychainSupported = $state(false)
+  let keychainBusy = $state(false)
+  let enableKeychainOpen = $state(false)
+  let disableKeychainOpen = $state(false)
+  let keychainPassphrase = $state('')
+  let keychainError = $state('')
+
   const customKinds = $derived(savedCustomKinds)
   const usageByKind = $derived(
     new Map(kindCounts.map(({ kind, count }) => [kind.toLowerCase(), count])),
   )
+  const activeVault = $derived(vaults.find((v) => v.id === activeVaultId) ?? null)
+  const keychainEnabled = $derived(activeVault?.keychain_enabled ?? false)
 
   onMount(async () => {
     try {
@@ -55,6 +81,7 @@
         return
       }
       vaultName = session.vault_name
+      activeVaultId = session.vault_id ?? null
       const [kinds, res, vaultList] = await Promise.all([
         listCustomKinds(),
         queryEntries({}),
@@ -63,6 +90,12 @@
       savedCustomKinds = kinds
       kindCounts = res.kinds
       vaults = vaultList
+      try {
+        keychainSupported = await checkKeychainAvailable()
+      } catch {
+        // A failed probe means the keychain cannot be used on this system.
+        keychainSupported = false
+      }
     } catch (err) {
       if (isVaultLockedError(err)) {
         void goto('/', { replace: true })
@@ -168,6 +201,7 @@
     lockBusy = true
     try {
       await lock()
+      markManualLock()
       await goto('/')
     } catch (err) {
       toast.show({
@@ -211,6 +245,102 @@
         message: `Failed to refresh vault list: ${err instanceof Error ? err.message : String(err)}`,
         variant: 'danger',
       })
+    }
+  }
+
+  async function refreshVaultsAfterKeychain(action: string) {
+    try {
+      vaults = await listVaults()
+    } catch (err) {
+      toast.show({
+        message: `${action}, but the vault list could not be refreshed: ${err instanceof Error ? err.message : String(err)}`,
+        variant: 'info',
+      })
+    }
+  }
+
+  function handleKeychainClick(event: MouseEvent) {
+    // The switch mirrors saved state; confirmation happens in a modal, so cancel
+    // the native toggle instead of letting the input and vault state diverge.
+    event.preventDefault()
+    if (keychainBusy) return
+    if (keychainEnabled) {
+      disableKeychainOpen = true
+    } else {
+      keychainPassphrase = ''
+      keychainError = ''
+      enableKeychainOpen = true
+    }
+  }
+
+  function closeEnableKeychain() {
+    if (keychainBusy) return
+    enableKeychainOpen = false
+    keychainPassphrase = ''
+    keychainError = ''
+  }
+
+  async function handleEnableKeychain(event: SubmitEvent) {
+    event.preventDefault()
+    if (keychainBusy) return
+    if (keychainPassphrase.length === 0) {
+      keychainError = 'Enter your master passphrase.'
+      return
+    }
+
+    keychainBusy = true
+    keychainError = ''
+    try {
+      await enableKeychain(keychainPassphrase)
+      keychainPassphrase = ''
+      enableKeychainOpen = false
+      if (activeVaultId) {
+        vaults = vaults.map((v) => (v.id === activeVaultId ? { ...v, keychain_enabled: true } : v))
+      }
+      toast.show({ message: 'Keychain unlock enabled', variant: 'success' })
+      await refreshVaultsAfterKeychain('Keychain unlock enabled')
+    } catch (err) {
+      if (isVaultLockedError(err)) {
+        void goto('/', { replace: true })
+        return
+      }
+      keychainError = isInvalidMasterKeyError(err)
+        ? 'Incorrect passphrase. Please try again.'
+        : err instanceof Error
+          ? err.message
+          : String(err)
+    } finally {
+      keychainBusy = false
+    }
+  }
+
+  function closeDisableKeychain() {
+    if (keychainBusy) return
+    disableKeychainOpen = false
+  }
+
+  async function handleDisableKeychain() {
+    if (keychainBusy) return
+    keychainBusy = true
+    try {
+      await disableKeychain()
+      disableKeychainOpen = false
+      if (activeVaultId) {
+        vaults = vaults.map((v) => (v.id === activeVaultId ? { ...v, keychain_enabled: false } : v))
+      }
+      toast.show({ message: 'Keychain unlock disabled', variant: 'success' })
+      await refreshVaultsAfterKeychain('Keychain unlock disabled')
+    } catch (err) {
+      if (isVaultLockedError(err)) {
+        void goto('/', { replace: true })
+        return
+      }
+      toast.show({
+        message: `Failed to disable keychain unlock: ${err instanceof Error ? err.message : String(err)}`,
+        variant: 'danger',
+      })
+    } finally {
+      keychainBusy = false
     }
   }
 </script>
@@ -491,6 +621,31 @@
               Lock Vault
             </Button>
           </div>
+
+          <div class="setting-divider"></div>
+
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Unlock with system keychain</div>
+              <div class="setting-sub">
+                {#if !keychainSupported}
+                  The system keychain is unavailable on this system.
+                {:else if keychainEnabled}
+                  This vault can be unlocked without typing its master passphrase. Anyone with
+                  access to your unlocked OS account may be able to unlock it.
+                {:else}
+                  Save this vault's encryption key in the OS keychain so you can unlock it without
+                  typing the master passphrase.
+                {/if}
+              </div>
+            </div>
+            <Switch
+              checked={keychainEnabled}
+              disabled={!keychainSupported || keychainBusy || activeVault === null}
+              onclick={handleKeychainClick}
+              aria-label="Unlock with system keychain"
+            />
+          </div>
         </Card>
       </section>
     </div>
@@ -498,6 +653,63 @@
 </div>
 
 <CreateVaultModal bind:open={createVaultOpen} onCreated={handleVaultCreated} />
+
+<Modal
+  bind:open={enableKeychainOpen}
+  title="Enable keychain unlock"
+  size="sm"
+  onClose={closeEnableKeychain}
+  closeOnBackdropClick={!keychainBusy}
+>
+  <form id="enable-keychain-form" class="fields" onsubmit={handleEnableKeychain}>
+    <p class="modal-copy">
+      Enter your master passphrase to confirm. PassHarbor will store this vault's encryption key in
+      the OS keychain. Anyone with access to your unlocked OS account may be able to unlock this
+      vault.
+    </p>
+    <Input
+      type="password"
+      label="Master passphrase"
+      placeholder="Enter your master passphrase"
+      bind:value={keychainPassphrase}
+      disabled={keychainBusy}
+      error={keychainError || undefined}
+    />
+  </form>
+
+  {#snippet footer()}
+    <DialogActions
+      confirmLabel="Enable"
+      submitForm="enable-keychain-form"
+      busy={keychainBusy}
+      confirmDisabled={keychainPassphrase.length === 0}
+      oncancel={closeEnableKeychain}
+    />
+  {/snippet}
+</Modal>
+
+<Modal
+  bind:open={disableKeychainOpen}
+  title="Disable keychain unlock"
+  size="sm"
+  onClose={closeDisableKeychain}
+  closeOnBackdropClick={!keychainBusy}
+>
+  <p class="modal-copy">
+    PassHarbor will remove this vault's encryption key from the OS keychain. You will need to enter
+    your master passphrase to unlock this vault again.
+  </p>
+
+  {#snippet footer()}
+    <DialogActions
+      confirmLabel="Disable"
+      busy={keychainBusy}
+      danger
+      onconfirm={handleDisableKeychain}
+      oncancel={closeDisableKeychain}
+    />
+  {/snippet}
+</Modal>
 
 <style>
   .settings-page {
@@ -725,6 +937,25 @@
   .mono-val {
     font-family: ui-monospace, 'Cascadia Code', 'Fira Mono', monospace;
     font-size: 0.85rem;
+  }
+
+  .setting-divider {
+    height: 1px;
+    margin: 1rem 0;
+    background: var(--border);
+  }
+
+  .fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .modal-copy {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--secondary-text);
+    line-height: 1.55;
   }
 
   /* Vaults Section */

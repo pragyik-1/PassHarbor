@@ -29,6 +29,7 @@ rusqlite = { version = "0.40.2", features = ["bundled-sqlcipher-vendored-openssl
 zeroize = "1.9.1"
 secrecy = { version = "0.10.3", features = ["serde"] }
 rand = "0.9"
+keyring = { version = "4", features = ["v1"] }
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

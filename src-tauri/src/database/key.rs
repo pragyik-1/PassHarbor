@@ -21,8 +21,10 @@ impl DbKey {
         self.0.expose_secret()
     }
 
-    #[cfg(test)]
-    pub fn from_bytes(bytes: [u8; 32]) -> Self {
-        Self(SecretBox::new(Box::new(bytes)))
+    pub(crate) fn from_bytes(bytes: [u8; 32]) -> Self {
+        let mut key = bytes;
+        let secret = SecretBox::new(Box::new(key));
+        key.zeroize();
+        Self(secret)
     }
 }
