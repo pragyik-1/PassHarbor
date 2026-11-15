@@ -4,6 +4,10 @@ Canonical contract for every AI agent and human contributor adding, modifying, o
 
 **Stack**: Tauri 2 + Rust backend; SvelteKit + Svelte 5 runes + strict TypeScript frontend; static SPA (`ssr = false`). Target: documented desktop dev environment only. Do not claim another platform without testing there.
 
+## Current Status
+
+Local-first desktop password manager. Implemented: multi-vault create/select/default/last-opened, Argon2id unlock with failed-attempt throttling, entry CRUD with SQL-side search/filter/sort, password history (20 versions), client-side secure generator, custom kinds, opt-in OS keychain unlock, and light/dark themes. Not implemented but planned: import/export, attachments, and browser/autofill integration. Do not claim unimplemented behavior.
+
 ## Commands
 
 Run from repo root unless noted.
@@ -13,6 +17,7 @@ Run from repo root unless noted.
 | Dev app             | `npm run tauri dev`                                           |
 | Frontend only       | `npm run dev`                                                 |
 | Frontend type check | `npm run check`                                               |
+| Frontend format     | `npm run format` (Prettier, `src/`)                           |
 | Production build    | `npm run tauri build`                                         |
 | Rust check          | `cargo check` (in `src-tauri/`)                               |
 | Rust tests          | `cargo test` (in `src-tauri/`)                                |
@@ -125,21 +130,24 @@ src/                         SvelteKit SPA (no SSR)
   lib/generator.ts           Client-side secure password generation
   lib/kinds.ts               Built-in kinds and client-side kind helpers
   lib/time.ts                Unix-second formatting helpers
+  lib/utils.svelte.ts        Route-derived UI helpers
+  lib/styles/global.css      Global styles and design-token overrides
   lib/components/            Shared and dashboard Svelte components
-  routes/                    Unlock, dashboard, and settings pages
+  routes/                    Unlock (/), dashboard, and settings pages
 src-tauri/src/
   main.rs                    Binary entry point
   lib.rs                     Tauri builder, state setup, command registration
   frontend_api.rs            All #[tauri::command] functions; the only IPC surface
+  keychain.rs                OS credential store access for opt-in keychain unlock
   master_key.rs              MasterKey + KdfParams (Argon2id, HKDF-SHA256)
-  state.rs                   AppState (session + VaultStore)
+  state.rs                   AppState (session + VaultStore + unlock lockout)
   error.rs                   Error enum
   prelude.rs                 Result<T>, IPCResult<T>, Error re-export
   database/
     mod.rs                   Database, entry queries, file helpers
     key.rs                   DbKey
     schema.rs                Entry/Password types, migrations, validation
-    vault_store.rs           VaultStore, manifests, vault selection
+    vault_store.rs           Multi-vault store: manifests, default/last-opened selection
 ```
 
 ### Module Boundaries
@@ -148,25 +156,27 @@ src-tauri/src/
 - **`database/mod.rs`** — SQLCipher connection lifecycle + CRUD SQL. Nothing outside `database/` opens a connection or executes SQL.
 - **`database/schema.rs`** — table types, validation, migration SQL. No SQL in `frontend_api.rs` or the UI.
 - **`master_key.rs`** — passphrase stretching + key expansion. No key derivation elsewhere.
-- **`vault_store.rs`** — vault discovery + manifest persistence. No vault paths built in other modules.
-- **`state.rs`** — owns the open session. All commands reach it only via `AppState::resolve(&app)`. Never construct a second `AppState`.
+- **`keychain.rs`** — OS credential store access and the encoded database-key payload. No other module talks to the platform keychain.
+- **`vault_store.rs`** — vault discovery, manifest persistence, default/last-opened selection. No vault paths built in other modules.
+- **`state.rs`** — owns the open session and unlock lockout. All commands reach it only via `AppState::resolve(&app)`. Never construct a second `AppState`.
 
 ### Dependency Direction & Interface Stability
 
 - Dependencies: UI → IPC → domain → storage. Lower module never imports `frontend_api`, a route, or a Svelte component.
 - IPC command names, arg names, and payload shapes are a public contract. Rename requires updating `frontend_api.rs` + `lib.rs` + `src/lib/api.ts` in the same change.
-- Frontend matches exact strings `"Vault is locked"` and `"Invalid master key"`. Don't change those `Error` display strings without updating frontend matching and tests.
+- Frontend matches exact strings `"Vault is locked"`, `"Invalid master key"`, `"not found"`, `"Too many failed attempts"`, `"System keychain is unavailable"`, and `"Saved keychain entry could not unlock this vault"`. Don't change those `Error` display strings without updating frontend matching and tests.
 - `Error` variants may be added; existing variants may not be removed or reinterpreted without approval.
 - Schema migrations append-only. Version in `PRAGMA user_version`. DB newer than binary must be rejected, never downgraded.
 - Vault layout fixed: `<app data>/vaults/` contains `<id>.db`, plaintext `<id>.json` manifest, and `last_opened`. No scattering or second metadata store without approval.
 
 ### Storage & Crypto Contract
 
-- Each vault = SQLCipher database + plaintext manifest with `id`, `name`, `salt`, `kdf`, `created_at`.
+- Each vault = SQLCipher database + plaintext manifest with `id`, `name`, `salt`, `kdf`, `created_at`, `is_default`.
 - Chain: passphrase → Argon2id (`KdfParams`) → `MasterKey` → HKDF-SHA256 (`b"db key"`) → `DbKey` → `PRAGMA key`.
+- Keychain opt-in stores only the derived `DbKey` in the OS credential store, never the passphrase or master key. The payload is magic-prefixed and versioned; a missing or stale entry disables the opt-in, while an unavailable store leaves it enabled and falls back to the passphrase.
 - `PRAGMA key` must be the first statement on a vault connection.
 - `PRAGMA foreign_keys = ON` is required for password-history cascade deletion. Do not remove.
-- Missing database = error. Never recreate an empty database in place of a deleted or unreadable vault.
+- Unlock with no explicit vault id selects: default vault → last opened → oldest. A missing database is an error: never recreate it in place of a deleted or unreadable vault.
 - Wrong key → `Error::InvalidMasterKey`. Any other first-read failure → database error, not wrong passphrase.
 - Only `Database` holds an open connection. Closing the session = dropping `Database`. Don't keep a connection or key alive after lock.
 
@@ -179,6 +189,7 @@ Complete only when every item is true. State each verification result in the fin
 - [ ] `cargo test` passes (in `src-tauri/`), including new tests for new behavior.
 - [ ] `cargo clippy --all-targets -- -D warnings` passes (in `src-tauri/`).
 - [ ] `cargo fmt` run; must not reformat files outside the task — report pre-existing formatting issues instead of changing them.
+- [ ] `npm run format` run for changed frontend files.
 - [ ] `npm run check` passes with zero errors and zero warnings.
 - [ ] UI changes exercised via `npm run tauri dev`.
 - [ ] No secret in code, logs, errors, tests, or fixtures.
@@ -197,7 +208,7 @@ Agents must never:
 - Add a dependency, framework, directory, or abstraction without approval.
 - Add module-level global state, a second `AppState`, or a new DB connection owner.
 - Use `unwrap`/`expect`/`panic!`/`unreachable!`/`todo!` in prod (only allowed exception: startup `expect` above).
-- Swallow errors with `let _ =`, empty `catch` blocks, or a fallback that hides data loss.
+- Swallow errors with `let _ =`, empty `catch` blocks, or a fallback that hides data loss without explanation.
 - Report a failure only to a log while returning success.
 - Store, log, print, format, commit, or fixture any real secret or key material.
 - Implement custom cryptography, weaken KDF parameters, or bypass SQLCipher.
