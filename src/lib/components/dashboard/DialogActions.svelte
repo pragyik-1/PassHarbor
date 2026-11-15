@@ -8,6 +8,8 @@
     submitForm?: string
     busy?: boolean
     danger?: boolean
+    confirmDisabled?: boolean
+    cancelLabel?: string
   }
 
   let {
@@ -17,18 +19,20 @@
     submitForm,
     busy = false,
     danger = false,
+    confirmDisabled = false,
+    cancelLabel = 'Cancel',
   }: Props = $props()
 </script>
 
-<Row justify="end" gap={0.5}>
-  <Button variant="ghost" color="secondary" size="sm" disabled={busy} onclick={oncancel}>
-    Cancel
+<Row justify="end" gap={0.5} style="width: 100%">
+  <Button variant="ghost" color="secondary" disabled={busy} onclick={oncancel}>
+    {cancelLabel}
   </Button>
   <Button
     type={submitForm ? 'submit' : 'button'}
     form={submitForm}
-    size="sm"
     loading={busy}
+    disabled={busy || confirmDisabled}
     variant={danger ? 'outline' : undefined}
     color={danger ? 'danger' : undefined}
     onclick={onconfirm}

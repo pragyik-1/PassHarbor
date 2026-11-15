@@ -4,6 +4,7 @@
   import { FolderIcon } from 'lucide-svelte'
   import { listVaults, setDefaultVault, type VaultSummary } from '#lib/api.ts'
   import { timeAgo } from '#lib/time.ts'
+  import DialogActions from './dashboard/DialogActions.svelte'
 
   type VaultSelectionModalProps = {
     open?: boolean
@@ -123,21 +124,12 @@
   </div>
 
   {#snippet footer()}
-    <Row justify="end" gap={0.75} style="width: 100%">
-      <Button type="button" variant="ghost" color="secondary" size="md" onclick={handleClose}>
-        Cancel
-      </Button>
-      <Button
-        type="button"
-        variant="fill"
-        color="primary"
-        size="md"
-        disabled={!selectedVaultId}
-        onclick={handleProceed}
-      >
-        Proceed to unlock
-      </Button>
-    </Row>
+    <DialogActions
+      oncancel={handleClose}
+      onconfirm={handleProceed}
+      confirmLabel="Proceed"
+      confirmDisabled={!selectedVaultId}
+    />
   {/snippet}
 </Modal>
 
